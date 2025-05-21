@@ -1,9 +1,10 @@
 plugins {
-    id 'com.android.application' version '8.7.3'
+    id 'com.android.library' version '8.7.3'
     id 'org.jetbrains.kotlin.android' version '1.9.24'
     id 'org.jetbrains.kotlin.kapt' version '1.9.24'
     id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.24'
     id "org.jetbrains.kotlin.plugin.parcelize" version "1.9.24"
+    id 'maven-publish'
 }
 
 android {
@@ -13,11 +14,13 @@ android {
     ndkVersion "26.1.10909125"
 
     defaultConfig {
-        applicationId "com.gaurav.avnc"
         minSdk 21
         targetSdk 35
         versionCode 42
         versionName "2.8.0"
+
+        buildConfigField "String", "VERSION_NAME", "\"${version}\""
+        buildConfigField "int", "VERSION_CODE", "${versionCode}"
 
         javaCompileOptions {
             annotationProcessorOptions {
@@ -42,11 +45,6 @@ android {
 
     buildTypes {
 
-        debug {
-            applicationIdSuffix '.debug'
-            versionNameSuffix ' (debug)'
-        }
-
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -54,8 +52,6 @@ android {
 
         ci {
             initWith(release)
-            applicationIdSuffix '.ci'
-            versionNameSuffix ' (CI)'
         }
     }
 
@@ -70,14 +66,9 @@ android {
             path file('CMakeLists.txt')
         }
     }
-
-    bundle {
-        density {
-            enableSplit false
-        }
-        language {
-            enableSplit false
-        }
+    
+    lintOptions {
+        disable 'MissingTranslation'
     }
 }
 

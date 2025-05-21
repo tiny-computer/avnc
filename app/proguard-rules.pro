@@ -1,6 +1,8 @@
 -dontobfuscate
 -keepattributes SourceFile,LineNumberTable
 
+-dontwarn java.lang.invoke.StringConcatFactory
+
 # These are mainly needed in full R8 mode, but Connectbot uses these by default
 # so we keep these to avoid any breakage.
 -keepattributes InnerClasses
