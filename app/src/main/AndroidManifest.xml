@@ -42,22 +42,28 @@
         <activity
             android:name=".ui.home.UrlBarActivity"
             android:parentActivityName=".ui.home.HomeActivity"
-            android:windowSoftInputMode="stateVisible" />
+            android:windowSoftInputMode="stateVisible"
+            android:theme="@style/App.Theme" />
 
         <activity
             android:name=".ui.vnc.VncActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
-            tools:ignore="UnusedAttribute" />
+            tools:ignore="UnusedAttribute"
+            android:theme="@style/App.Theme" />
 
         <activity
             android:name=".ui.vnc.IntentReceiverActivity"
             android:theme="@style/App.SplashTheme.Dark" />
 
-        <activity android:name=".ui.prefs.PrefsActivity" />
+        <activity
+            android:name=".ui.prefs.PrefsActivity"
+            android:theme="@style/App.Theme" />
 
-        <activity android:name=".ui.about.AboutActivity" />
+        <activity
+            android:name=".ui.about.AboutActivity"
+            android:theme="@style/App.Theme" />
     </application>
 
 </manifest>

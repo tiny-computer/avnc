@@ -70,6 +70,8 @@ android {
     lintOptions {
         disable 'MissingTranslation'
     }
+
+    resourcePrefix "avnc_"
 }
 
 kotlin {
