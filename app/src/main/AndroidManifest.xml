@@ -15,14 +15,8 @@
     <application>
 
         <activity-alias
-            android:name=".StartupActivity"
-            android:exported="true"
-            android:targetActivity=".ui.home.HomeActivity">
-        </activity-alias>
-
-        <activity-alias
             android:name=".UriReceiverActivity"
-            android:exported="true"
+            android:exported="false"
             android:targetActivity=".ui.vnc.IntentReceiverActivity">
 
             <intent-filter>
@@ -36,26 +30,12 @@
         </activity-alias>
 
         <activity
-            android:name=".ui.home.HomeActivity"
-            android:theme="@style/App.SplashTheme.Dark" />
-
-        <activity
-            android:name=".ui.home.UrlBarActivity"
-            android:parentActivityName=".ui.home.HomeActivity"
-            android:windowSoftInputMode="stateVisible"
-            android:theme="@style/App.Theme" />
-
-        <activity
             android:name=".ui.vnc.VncActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
             tools:ignore="UnusedAttribute"
             android:theme="@style/App.Theme" />
-
-        <activity
-            android:name=".ui.vnc.IntentReceiverActivity"
-            android:theme="@style/App.SplashTheme.Dark" />
 
         <activity
             android:name=".ui.prefs.PrefsActivity"
