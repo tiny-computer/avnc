@@ -9,6 +9,12 @@
 -keep public class com.trilead.ssh2.compression.**
 -keep public class com.trilead.ssh2.crypto.**
 
+-keep class com.gaurav.avnc.vnc.VncUri {
+    public <init>(java.lang.String);
+}
+-keepclassmembers class com.gaurav.avnc.ui.vnc.* {
+    public void startVncActivity(android.app.Activity, com.gaurav.avnc.vnc.VncUri);
+}
 
 # Needed to keep R8 happy about Tink library (used by sshlib)
 -dontwarn com.google.errorprone.annotations.Immutable
