@@ -38,6 +38,10 @@
             android:theme="@style/App.Theme" />
 
         <activity
+            android:name=".ui.vnc.IntentReceiverActivity"
+            android:theme="@style/App.SplashTheme.Dark" />
+
+        <activity
             android:name=".ui.prefs.PrefsActivity"
             android:theme="@style/App.Theme" />
 
