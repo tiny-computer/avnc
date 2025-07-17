@@ -43,11 +43,23 @@
 
         <activity
             android:name=".ui.prefs.PrefsActivity"
-            android:theme="@style/App.Theme" />
+            android:exported="false"
+            android:theme="@style/App.Theme">
+            <intent-filter>
+                <action android:name="com.gaurav.avnc.INTERNAL_ACTION_PREFS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".ui.about.AboutActivity"
-            android:theme="@style/App.Theme" />
+            android:exported="false"
+            android:theme="@style/App.Theme">
+            <intent-filter>
+                <action android:name="com.gaurav.avnc.INTERNAL_ACTION_ABOUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>
