@@ -12,8 +12,8 @@
 -keep class com.gaurav.avnc.vnc.VncUri {
     public <init>(java.lang.String);
 }
--keepclassmembers class com.gaurav.avnc.ui.vnc.* {
-    public void startVncActivity(android.app.Activity, com.gaurav.avnc.vnc.VncUri);
+-keep class com.gaurav.avnc.ui.vnc.VncActivityKt {
+    public static void startVncActivity(android.app.Activity, com.gaurav.avnc.vnc.VncUri);
 }
 
 # Needed to keep R8 happy about Tink library (used by sshlib)

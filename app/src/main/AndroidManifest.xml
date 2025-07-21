@@ -16,17 +16,8 @@
 
         <activity-alias
             android:name=".UriReceiverActivity"
-            android:exported="false"
+            android:exported="true"
             android:targetActivity=".ui.vnc.IntentReceiverActivity">
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="vnc" />
-            </intent-filter>
         </activity-alias>
 
         <activity
@@ -43,22 +34,14 @@
 
         <activity
             android:name=".ui.prefs.PrefsActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/App.Theme">
-            <intent-filter>
-                <action android:name="com.gaurav.avnc.INTERNAL_ACTION_PREFS" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
 
         <activity
             android:name=".ui.about.AboutActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/App.Theme">
-            <intent-filter>
-                <action android:name="com.gaurav.avnc.INTERNAL_ACTION_ABOUT" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
     </application>
 
