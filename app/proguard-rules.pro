@@ -11,11 +11,11 @@
 
 -keep class com.gaurav.avnc.vnc.VncUri {
     public <init>(java.lang.String);
-    public com.gaurav.avnc.model.ServerProfile toServerProfile();
 }
 
--keep class com.gaurav.avnc.ui.vnc.VncActivityKt {
+-keepclasseswithmembers class * {
     public static android.content.Intent createVncIntent(android.content.Context, com.gaurav.avnc.model.ServerProfile);
+    public com.gaurav.avnc.model.ServerProfile toServerProfile();
 }
 
 -keep class com.gaurav.avnc.model.ServerProfile { *; }
