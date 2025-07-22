@@ -11,10 +11,14 @@
 
 -keep class com.gaurav.avnc.vnc.VncUri {
     public <init>(java.lang.String);
+    public com.gaurav.avnc.model.ServerProfile toServerProfile();
 }
+
 -keep class com.gaurav.avnc.ui.vnc.VncActivityKt {
-    public static void createVncIntent(android.content.Context, com.gaurav.avnc.model.ServerProfile);
+    public static android.content.Intent createVncIntent(android.content.Context, com.gaurav.avnc.model.ServerProfile);
 }
+
+-keep class com.gaurav.avnc.model.ServerProfile { *; }
 
 # Needed to keep R8 happy about Tink library (used by sshlib)
 -dontwarn com.google.errorprone.annotations.Immutable
