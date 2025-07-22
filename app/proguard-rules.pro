@@ -13,7 +13,7 @@
     public <init>(java.lang.String);
 }
 -keep class com.gaurav.avnc.ui.vnc.VncActivityKt {
-    public static void startVncActivity(android.app.Activity, com.gaurav.avnc.vnc.VncUri);
+    public static void createVncIntent(android.content.Context, com.gaurav.avnc.model.ServerProfile);
 }
 
 # Needed to keep R8 happy about Tink library (used by sshlib)
