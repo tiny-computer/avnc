@@ -10,7 +10,7 @@
 -keep public class com.trilead.ssh2.crypto.**
 
 -keepclasseswithmembers class * {
-    public static void startVncActivity(source: android.app.Activity, uri: com.gaurav.avnc.vnc.VncUri);
+    public static void startVncActivity(android.app.Activity, com.gaurav.avnc.vnc.VncUri);
 }
 
 # Needed to keep R8 happy about Tink library (used by sshlib)
