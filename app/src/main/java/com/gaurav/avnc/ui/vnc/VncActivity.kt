@@ -5,7 +5,7 @@
  *
  * See COPYING.txt for more details.
  */
-
+@file:JvmName("VncActivityUtils")
 package com.gaurav.avnc.ui.vnc
 
 import android.app.Activity
@@ -68,7 +68,7 @@ fun startVncActivity(source: Activity, profile: ServerProfile) {
     source.startActivity(createVncIntent(source, profile))
 }
 
-fun startVncActivity(source: Activity, uri: VncUri) {
+public fun startVncActivity(source: Activity, uri: VncUri) {
     startVncActivity(source, uri.toServerProfile())
 }
 
