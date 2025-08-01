@@ -11,9 +11,9 @@ package com.gaurav.avnc
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.model.db.MainDb
 import com.gaurav.avnc.ui.about.AboutActivity
-import com.gaurav.avnc.ui.home.HomeActivity
-import com.gaurav.avnc.ui.home.ServerTabs
-import com.gaurav.avnc.ui.home.UrlBarActivity
+// import com.gaurav.avnc.ui.home.HomeActivity
+// import com.gaurav.avnc.ui.home.ServerTabs
+// import com.gaurav.avnc.ui.home.UrlBarActivity
 import com.gaurav.avnc.ui.prefs.PrefsActivity
 import com.gaurav.avnc.ui.vnc.Dispatcher
 import com.gaurav.avnc.ui.vnc.FrameState
