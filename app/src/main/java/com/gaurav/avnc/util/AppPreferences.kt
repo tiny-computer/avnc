@@ -29,10 +29,10 @@ class AppPreferences(context: Context) {
     }
 
     inner class Viewer {
-        val orientation; get() = prefs.getString("viewer_orientation", "auto")
+        val orientation; get() = prefs.getString("viewer_orientation", "landscape")
         val fullscreen; get() = prefs.getBoolean("fullscreen_display", true)
-        val pipEnabled; get() = prefs.getBoolean("pip_enabled", false)
-        val drawBehindCutout; get() = fullscreen && prefs.getBoolean("viewer_draw_behind_cutout", false)
+        val pipEnabled; get() = prefs.getBoolean("pip_enabled", true)
+        val drawBehindCutout; get() = fullscreen && prefs.getBoolean("viewer_draw_behind_cutout", true)
         val keepScreenOn; get() = prefs.getBoolean("keep_screen_on", true)
         val toolbarAlignment; get() = prefs.getString("toolbar_alignment", "start")
         val toolbarOpenWithSwipe; get() = prefs.getBoolean("toolbar_open_with_swipe", true)
@@ -45,14 +45,14 @@ class AppPreferences(context: Context) {
     }
 
     inner class Gesture {
-        val style; get() = prefs.getString("gesture_style", "touchscreen")!!
+        val style; get() = prefs.getString("gesture_style", "touchpad")!!
         val tap1 = "left-click" //Preference UI was removed
         val tap2; get() = prefs.getString("gesture_tap2", "open-keyboard")!!
         val tap3; get() = prefs.getString("gesture_tap3", "none")!!
         val doubleTap; get() = prefs.getString("gesture_double_tap", "double-click")!!
         val longPress; get() = prefs.getString("gesture_long_press", "right-click")!!
         val swipe1; get() = prefs.getString("gesture_swipe1", "pan")!!
-        val swipe2; get() = prefs.getString("gesture_swipe2", "pan")!!
+        val swipe2; get() = prefs.getString("gesture_swipe2", "remote-scroll")!!
         val swipe3; get() = prefs.getString("gesture_swipe3", "pan")!!
         val doubleTapSwipe; get() = prefs.getString("gesture_double_tap_swipe", "remote-drag")!!
         val longPressSwipe; get() = prefs.getString("gesture_long_press_swipe", "none")!!
@@ -70,7 +70,7 @@ class AppPreferences(context: Context) {
         var vkLayout by StringPref("vk_keys_layout", null)
 
         val mousePassthrough; get() = prefs.getBoolean("mouse_passthrough", true)
-        val hideLocalCursor; get() = prefs.getBoolean("hide_local_cursor", false)
+        val hideLocalCursor; get() = prefs.getBoolean("hide_local_cursor", true)
         val hideRemoteCursor; get() = prefs.getBoolean("hide_remote_cursor", false)
         val mouseBack; get() = prefs.getString("mouse_back", "right-click")!!
         val interceptMouseBack; get() = mouseBack != "default"

@@ -15,7 +15,7 @@
         app:title="@string/pref_gesture">
 
         <com.gaurav.avnc.ui.prefs.ListPreferenceEx
-            app:defaultValue="touchscreen"
+            app:defaultValue="touchpad"
             app:entries="@array/gesture_style_entries"
             app:entryValues="@array/gesture_style_values"
             app:helpMessage="@string/msg_gesture_style_help"
@@ -65,7 +65,7 @@
             app:useSimpleSummaryProvider="true" />
 
         <ListPreference
-            app:defaultValue="pan"
+            app:defaultValue="remote-scroll"
             app:entries="@array/swipe2_action_entries"
             app:entryValues="@array/swipe2_action_values"
             app:key="gesture_swipe2"
@@ -123,7 +123,7 @@
             app:title="@string/pref_mouse_passthrough" />
 
         <SwitchPreference
-            app:defaultValue="false"
+            app:defaultValue="true"
             app:key="hide_local_cursor"
             app:title="@string/pref_hide_local_cursor" />
 

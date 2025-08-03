@@ -11,7 +11,7 @@
     app:title="@string/pref_viewer">
 
     <ListPreference
-        android:defaultValue="auto"
+        android:defaultValue="landscape"
         android:entries="@array/orientation_entries"
         android:entryValues="@array/orientation_values"
         android:key="viewer_orientation"
@@ -29,13 +29,13 @@
         app:title="@string/pref_fullscreen" />
 
     <SwitchPreference
-        app:defaultValue="false"
+        app:defaultValue="true"
         app:dependency="fullscreen_display"
         app:key="viewer_draw_behind_cutout"
         app:title="@string/pref_display_cutout" />
 
     <SwitchPreference
-        app:defaultValue="false"
+        app:defaultValue="true"
         app:key="pip_enabled"
         app:title="@string/pref_enable_pip" />
 

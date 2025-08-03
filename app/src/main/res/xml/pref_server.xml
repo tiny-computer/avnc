@@ -15,4 +15,9 @@
         app:key="clipboard_sync"
         app:title="@string/pref_clipboard_sync" />
 
+    <SwitchPreference
+        app:defaultValue="false"
+        app:key="auto_reconnect"
+        app:title="@string/pref_auto_reconnect" />
+
 </PreferenceScreen>
