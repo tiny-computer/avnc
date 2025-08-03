@@ -82,6 +82,7 @@ class AppPreferences(context: Context) {
 
     inner class Server {
         val clipboardSync; get() = prefs.getBoolean("clipboard_sync", true)
+        val sendStringViaClipboard; get() = prefs.getBoolean("send_string_via_clipboard", true)
         val lockSavedServer; get() = prefs.getBoolean("lock_saved_server", false)
         val autoReconnect; get() = prefs.getBoolean("auto_reconnect", false)
         val discoveryAutorun; get() = prefs.getBoolean("discovery_autorun", true)

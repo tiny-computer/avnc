@@ -243,6 +243,23 @@ class VncClient(private val observer: Observer) {
     }
 
     /**
+     * Sends text to remote desktop's clipboard and pastes it.
+     */
+    fun sendStringViaClipboard(text: String) = ifConnectedAndInteractive {
+        val savedCutText = lastCutText
+        sendCutText(text)
+
+        // Send Shift+Insert
+        sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), true)
+        sendKeyEvent(XKeySym.XK_Insert, XTKeyCode.fromAndroidScancode(110), true)
+        sendKeyEvent(XKeySym.XK_Insert, XTKeyCode.fromAndroidScancode(110), false)
+        sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), false)
+
+        // Restore the original clipboard text
+        savedCutText?.let { sendCutText(it) }
+    }
+
+    /**
      * Set remote desktop size to given dimensions.
      * This needs server support to actually work.
      * Non-positive [width] & [height] are ignored.

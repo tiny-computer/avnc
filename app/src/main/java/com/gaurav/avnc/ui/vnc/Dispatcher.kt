@@ -162,6 +162,8 @@ class Dispatcher(private val activity: VncActivity) {
 
     fun onXKey(keySym: Int, xtCode: Int, isDown: Boolean) = messenger.sendKey(keySym, xtCode, isDown)
 
+    fun sendStringViaClipboard(text: String) = viewModel.sendStringViaClipboard(text)
+
     fun onGestureStyleChanged() {
         config = Config()
     }

@@ -363,6 +363,12 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
         }
     }
 
+    fun sendStringViaClipboard(text: String) {
+        if (pref.server.sendStringViaClipboard && client.connected) {
+            messenger.sendStringViaClipboard(text)
+        }
+    }
+
     private var clipReceiverJob: Job? = null
     private fun receiveClipboardText(text: String) {
         if (!pref.server.clipboardSync)

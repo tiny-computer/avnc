@@ -82,7 +82,7 @@ import com.gaurav.avnc.vnc.XTKeyCode
  * [X Windows System Protocol](https://www.x.org/releases/X11R7.7/doc/xproto/x11protocol.html#keysym_encoding)
  *
  */
-class KeyHandler(private val dispatcher: Dispatcher, prefs: AppPreferences) {
+class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPreferences) {
 
     var processedEventObserver: ((KeyEvent) -> Unit)? = null
     var enableMacOSCompatibility = false
@@ -177,10 +177,14 @@ class KeyHandler(private val dispatcher: Dispatcher, prefs: AppPreferences) {
             KeyEvent.ACTION_MULTIPLE -> {
                 if (event.keyCode == KeyEvent.KEYCODE_UNKNOWN) {
 
-                    // Here, only Unicode characters are available.
-                    forEachCodePointOf(event.characters) {
-                        model.inEvents += InEvent(true, uChar = it)
-                        model.inEvents += InEvent(false, uChar = it)
+                    if (prefs.server.sendStringViaClipboard) {
+                        dispatcher.sendStringViaClipboard(event.characters)
+                    } else {
+                        // Here, only Unicode characters are available.
+                        forEachCodePointOf(event.characters) {
+                            model.inEvents += InEvent(true, uChar = it)
+                            model.inEvents += InEvent(false, uChar = it)
+                        }
                     }
 
                 } else {

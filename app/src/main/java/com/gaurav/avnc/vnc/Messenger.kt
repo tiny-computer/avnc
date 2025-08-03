@@ -92,6 +92,10 @@ class Messenger(private val client: VncClient) {
         execute { client.sendCutText(text) }
     }
 
+    fun sendStringViaClipboard(text: String) {
+        execute { client.sendStringViaClipboard(text) }
+    }
+
     fun setDesktopSize(width: Int, height: Int) {
         execute { client.setDesktopSize(width, height) }
     }

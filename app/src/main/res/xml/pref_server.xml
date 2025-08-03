@@ -16,6 +16,11 @@
         app:title="@string/pref_clipboard_sync" />
 
     <SwitchPreference
+        app:defaultValue="true"
+        app:key="send_string_via_clipboard"
+        app:title="@string/pref_send_string_via_clipboard" />
+
+    <SwitchPreference
         app:defaultValue="false"
         app:key="auto_reconnect"
         app:title="@string/pref_auto_reconnect" />
