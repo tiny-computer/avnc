@@ -260,7 +260,7 @@ class VncClient(private val observer: Observer) {
         // Restore the original clipboard text
         savedCutText?.let {
             android.util.Log.d("VncClient", "Restoring cut text: $it")
-            sendCutText(it)
+            // sendCutText(it)
         }
     }
 
