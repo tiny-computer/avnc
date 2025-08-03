@@ -229,23 +229,16 @@ class VncClient(private val observer: Observer) {
 
 
     /**
-     * Force sends text to remote desktop's clipboard.
-     */
-    fun forceSendCutText(text: String) = ifConnectedAndInteractive {
-        val sent = if (nativeIsUTF8CutTextSupported(nativePtr))
-            nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.UTF_8), true)
-        else
-            nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.ISO_8859_1), false)
-        if (sent)
-            lastCutText = text
-    }
-
-    /**
      * Sends text to remote desktop's clipboard.
      */
     fun sendCutText(text: String) = ifConnectedAndInteractive {
         if (text != lastCutText) {
-            forceSendCutText(text)
+            val sent = if (nativeIsUTF8CutTextSupported(nativePtr))
+                nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.UTF_8), true)
+            else
+                nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.ISO_8859_1), false)
+            if (sent)
+                lastCutText = text
         }
     }
 
@@ -253,8 +246,10 @@ class VncClient(private val observer: Observer) {
      * Sends text to remote desktop's clipboard and pastes it.
      */
     fun sendStringViaClipboard(text: String) = ifConnectedAndInteractive {
+        android.util.Log.d("VncClient", "sendText: $text")
         val savedCutText = lastCutText
-        forceSendCutText(text)
+        android.util.Log.d("VncClient", "savedCutText: $savedCutText")
+        sendCutText(text)
 
         // Send Shift+Insert
         sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), true)
@@ -263,7 +258,10 @@ class VncClient(private val observer: Observer) {
         sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), false)
 
         // Restore the original clipboard text
-        savedCutText?.let { sendCutText(it) }
+        savedCutText?.let {
+            android.util.Log.d("VncClient", "Restoring cut text: $it")
+            sendCutText(it)
+        }
     }
 
     /**

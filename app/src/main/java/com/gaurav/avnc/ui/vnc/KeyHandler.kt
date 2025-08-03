@@ -178,9 +178,11 @@ class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPrefe
                 if (event.keyCode == KeyEvent.KEYCODE_UNKNOWN) {
 
                     if (prefs.server.sendStringViaClipboard) {
+                        android.util.Log.d("KeyHandler", "Send text via clipboard: ${event.characters}")
                         dispatcher.sendStringViaClipboard(event.characters)
                     } else {
                         // Here, only Unicode characters are available.
+                        android.util.Log.d("KeyHandler", "Sending characters one by one: ${event.characters}")
                         forEachCodePointOf(event.characters) {
                             model.inEvents += InEvent(true, uChar = it)
                             model.inEvents += InEvent(false, uChar = it)

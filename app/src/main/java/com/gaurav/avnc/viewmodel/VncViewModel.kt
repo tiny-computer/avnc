@@ -365,6 +365,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
 
     fun sendStringViaClipboard(text: String) {
         if (pref.server.sendStringViaClipboard && client.connected) {
+            Log.d("VncViewModel", "sendPastedText: $text")
             messenger.sendStringViaClipboard(text)
         }
     }
