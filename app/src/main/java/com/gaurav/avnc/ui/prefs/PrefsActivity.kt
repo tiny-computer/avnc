@@ -154,6 +154,7 @@ class PrefsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreference
     @Keep class Server : PrefFragment(R.xml.pref_server) {
         private val authPrompt by lazy { DeviceAuthPrompt(requireActivity()) }
 
+        /*
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             val savedServerLock = findPreference<SwitchPreference>("lock_saved_server")!!
@@ -173,6 +174,7 @@ class PrefsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreference
                 true
             }
         }
+        */
     }
 
     @Keep class Tools : PrefFragment(R.xml.pref_tools)
