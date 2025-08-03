@@ -16,8 +16,8 @@ android {
     defaultConfig {
         minSdk 21
         targetSdk 35
-        versionCode 43
-        versionName "2.9.0"
+        versionCode 44
+        versionName "2.9.1"
 
         buildConfigField "String", "VERSION_NAME", "\"${version}\""
         buildConfigField "int", "VERSION_CODE", "${versionCode}"
