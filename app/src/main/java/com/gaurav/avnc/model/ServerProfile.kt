@@ -85,8 +85,8 @@ data class ServerProfile(
          * Use raw encoding for framebuffer.
          * This can improve performance when server is running on localhost.
          */
-        @ColumnInfo(defaultValue = "0")
-        var useRawEncoding: Boolean = false,
+        @ColumnInfo(defaultValue = "1")
+        var useRawEncoding: Boolean = true,
 
         /**
          * Initial zoom for the viewer.
@@ -125,7 +125,7 @@ data class ServerProfile(
          * Composite field for various flags.
          * This is accessed via individual members like [fLegacyKeySym].
          */
-        var flags: Long = FLAG_LEGACY_KEYSYM,
+        var flags: Long = FLAG_LEGACY_KEYSYM or FLAG_ZOOM_LOCKED,
 
         /**
          * Preferred style to use for gesture handling.

@@ -75,7 +75,7 @@ class ImportExportFragment : Fragment() {
     private fun generateFilename(): String {
         val date = Date()
         val dateStr = DateFormat.getDateInstance(DateFormat.MEDIUM).format(date)
-        return "${getString(R.string.app_name)}-Export-${date.time} $dateStr.json"
+        return "${getString(R.string.avnc_app_name)}-Export-${date.time} $dateStr.json"
     }
 
     private fun startImport() {
