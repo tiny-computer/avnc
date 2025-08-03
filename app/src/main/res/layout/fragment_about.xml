@@ -19,7 +19,7 @@
             android:layout_height="80dp"
             android:layout_gravity="center"
             android:importantForAccessibility="no"
-            android:src="@mipmap/ic_launcher_round" />
+            android:src="@mipmap/avnc_ic_launcher_round" />
 
         <TextView
             android:layout_width="wrap_content"
