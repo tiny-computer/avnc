@@ -46,17 +46,4 @@ open class BaseViewModel(val app: Application) : AndroidViewModel(app) {
     private fun launch(context: CoroutineContext, block: suspend CoroutineScope.() -> Unit): Job {
         return viewModelScope.launch(context, CoroutineStart.DEFAULT, block)
     }
-
-    init {  
-        pref.ui.theme.observeForever { updateNightMode(it) }  
-    }  
-    
-    private fun updateNightMode(theme: String) {  
-        val nightMode = when (theme) {  
-            "light" -> AppCompatDelegate.MODE_NIGHT_NO  
-            "dark" -> AppCompatDelegate.MODE_NIGHT_YES  
-            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM  
-        }  
-        AppCompatDelegate.setDefaultNightMode(nightMode)  
-    }
 }

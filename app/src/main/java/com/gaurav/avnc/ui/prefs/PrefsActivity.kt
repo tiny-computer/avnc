@@ -14,16 +14,24 @@ import android.os.Build
 import android.os.Bundle
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
 import com.gaurav.avnc.R
+import com.gaurav.avnc.util.AppPreferences
 import com.gaurav.avnc.util.DeviceAuthPrompt
 import com.google.android.material.appbar.MaterialToolbar
 
 class PrefsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
 
+    @Keep
+    lateinit var prefs_ui: AppPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        prefs_ui = AppPreferences(this)
+        prefs_ui.ui.theme.observeForever { updateNightMode(it) }
+
         DeviceAuthPrompt.applyFingerprintDialogFix(supportFragmentManager)
 
         super.onCreate(savedInstanceState)
@@ -38,6 +46,15 @@ class PrefsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreference
 
         setSupportActionBar(findViewById<MaterialToolbar>(R.id.toolbar))
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+
+    private fun updateNightMode(theme: String) {
+        val nightMode = when (theme) {
+            "light" -> AppCompatDelegate.MODE_NIGHT_NO
+            "dark" -> AppCompatDelegate.MODE_NIGHT_YES
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
     }
 
     override fun onSupportNavigateUp(): Boolean {
