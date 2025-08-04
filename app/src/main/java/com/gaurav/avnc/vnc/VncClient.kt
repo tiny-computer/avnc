@@ -242,14 +242,27 @@ class VncClient(private val observer: Observer) {
         }
     }
 
+    // Store "Restore the original clipboard text" job
+    private val restoreJob = AtomicReference<Job?>(null)
+    private val coroutineScope = CoroutineScope(Dispatchers.IO)
+
     /**
      * Sends text to remote desktop's clipboard and pastes it.
      */
     fun sendStringViaClipboard(text: String) = ifConnectedAndInteractive {
+
+        /**
+         * Send text without change lastCutText value.
+         */
+        fun justSendText(text: String) {
+            if (nativeIsUTF8CutTextSupported(nativePtr))
+                nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.UTF_8), true)
+            else
+                nativeSendCutText(nativePtr, text.toByteArray(StandardCharsets.ISO_8859_1), false)
+        }
+
         android.util.Log.d("VncClient", "sendText: $text")
-        val savedCutText = lastCutText
-        android.util.Log.d("VncClient", "savedCutText: $savedCutText")
-        sendCutText(text)
+        justSendText(text)
 
         // Send Shift+Insert
         sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), true)
@@ -257,11 +270,17 @@ class VncClient(private val observer: Observer) {
         sendKeyEvent(XKeySym.XK_Insert, XTKeyCode.fromAndroidScancode(110), false)
         sendKeyEvent(XKeySym.XK_Shift_L, XTKeyCode.fromAndroidScancode(42), false)
 
-        // Restore the original clipboard text
-        savedCutText?.let {
-            android.util.Log.d("VncClient", "Restoring cut text: $it")
-            // sendCutText(it)
+
+        // Restore the original clipboard text if we are not typing
+        restoreJob.get()?.cancel()
+        val newJob = coroutineScope.launch {
+            delay(500)
+            savedCutText?.let {
+                android.util.Log.d("VncClient", "Restoring cut text: $it")
+                justSendText(it)
+            }
         }
+        restoreJob.set(newJob)
     }
 
     /**
