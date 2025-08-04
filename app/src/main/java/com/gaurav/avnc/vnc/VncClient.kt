@@ -11,6 +11,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * This is a thin wrapper around native client.
@@ -275,7 +281,7 @@ class VncClient(private val observer: Observer) {
         restoreJob.get()?.cancel()
         val newJob = coroutineScope.launch {
             delay(500)
-            savedCutText?.let {
+            lastCutText?.let {
                 android.util.Log.d("VncClient", "Restoring cut text: $it")
                 justSendText(it)
             }
