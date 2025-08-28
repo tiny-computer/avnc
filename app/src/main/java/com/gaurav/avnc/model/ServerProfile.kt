@@ -72,8 +72,9 @@ data class ServerProfile(
         /**
          * Specifies the color level of received frames.
          * This value determines the pixel-format used for framebuffer.
+         * Not used yet.
          */
-        var colorLevel: Int = 0,
+        var colorLevel: Int = 7,
 
         /**
          * Specifies the image quality of the frames.
@@ -92,20 +93,17 @@ data class ServerProfile(
          * Initial zoom for the viewer.
          * This will be used in portrait orientation, or when per-orientation zooming is disabled.
          */
-        @ColumnInfo(defaultValue = "1.0")
         var zoom1: Float = 1f,
 
         /**
          * This will be used in landscape orientation if per-orientation zooming is enabled.
          */
-        @ColumnInfo(defaultValue = "1.0")
         var zoom2: Float = 1f,
 
         /**
-         * Specifies whether 'View Only' mode should be used.
-         * In this mode client does not send any input messages to remote server.
+         * View mode for this connection
          */
-        var viewOnly: Boolean = false,
+        var viewMode: Int = VIEW_MODE_NORMAL,
 
         /**
          * Whether the cursor should be drawn by client instead of server.
@@ -118,27 +116,24 @@ data class ServerProfile(
          * Server type hint received from user, e.g. tigervnc, tightvnc, vino
          * Can be used in future to handle known server quirks.
          */
-        @ColumnInfo(defaultValue = "")
         var serverTypeHint: String = "",
 
         /**
          * Composite field for various flags.
-         * This is accessed via individual members like [fLegacyKeySym].
+         * This is accessed via individual members like [fZoomLocked].
          */
-        var flags: Long = FLAG_LEGACY_KEYSYM or FLAG_ZOOM_LOCKED,
+        var flags: Long = FLAG_ZOOM_LOCKED,
 
         /**
          * Preferred style to use for gesture handling.
          * Possible values: auto, touchscreen, touchpad
          */
-        @ColumnInfo(defaultValue = "auto")
         var gestureStyle: String = "auto",
 
         /**
          * Preferred screen orientation.
          * Possible values: auto, portrait, landscape
          */
-        @ColumnInfo(defaultValue = "auto")
         var screenOrientation: String = "auto",
 
         /**
@@ -162,20 +157,27 @@ data class ServerProfile(
         /**
          * Resize remote desktop to match with local window size.
          */
-        @ColumnInfo(defaultValue = "0")
         var resizeRemoteDesktop: Boolean = false,
 
         /**
          * Enable Wake-on-LAN
          */
-        @ColumnInfo(defaultValue = "0")
         var enableWol: Boolean = false,
 
         /**
          * MAC address for Wake-on-LAN
          */
-        @ColumnInfo(defaultValue = "")
         var wolMAC: String = "",
+
+        /**
+         * Broadcast address for Wake-on-LAN
+         * Optional.
+         */
+        @ColumnInfo(defaultValue = "")
+        var wolBroadcastAddress: String = "",
+
+        @ColumnInfo(defaultValue = "9")
+        var wolPort: Int = 9,
 
         /**
          * These values are used for SSH Tunnel
@@ -185,8 +187,7 @@ data class ServerProfile(
         var sshUsername: String = "",
         var sshAuthType: Int = SSH_AUTH_KEY,
         var sshPassword: String = "",
-        var sshPrivateKey: String = "",
-        var sshPrivateKeyPassword: String = ""
+        var sshPrivateKey: String = ""
 
 ) : Parcelable {
 
@@ -199,8 +200,13 @@ data class ServerProfile(
         const val SSH_AUTH_KEY = 1
         const val SSH_AUTH_PASSWORD = 2
 
+        // View Modes
+        const val VIEW_MODE_NORMAL = 0
+        const val VIEW_MODE_NO_INPUT = 1
+        const val VIEW_MODE_NO_VIDEO = 2
+
         // Flag masks
-        private const val FLAG_LEGACY_KEYSYM = 0x01L
+        // private const val FLAG_LEGACY_KEYSYM = 0x01L
         private const val FLAG_BUTTON_UP_DELAY = 0x02L
         private const val FLAG_ZOOM_LOCKED = 0x04L
         const val FLAG_CONNECT_ON_APP_START = 0x08L
@@ -215,12 +221,6 @@ data class ServerProfile(
             p.flags = if (value) p.flags or flag else p.flags and flag.inv()
         }
     }
-
-    /**
-     * Flag to emit legacy X KeySym events in certain cases.
-     */
-    @IgnoredOnParcel
-    var fLegacyKeySym by Flag(FLAG_LEGACY_KEYSYM)
 
     /**
      * Flag to insert artificial delay before UP event of left-click.

@@ -80,7 +80,6 @@
     <string name="pref_logs">Günlük kayıtları</string>
     <string name="pref_keycode_map">Tuş kodu eşlemesi</string>
     <string name="title_save">Kaydet</string>
-    <string name="title_key_compat_mode">Eski tuş olaylarını gönder</string>
     <string name="title_hide_remote_cursor">Uzak işaretçiyi gizle</string>
     <string name="title_delete_servers_before_import">İçe aktarmadan önce geçerli sunucuları sil</string>
     <string name="desc_clear_url_btn">Temizle</string>
@@ -104,7 +103,6 @@
     <string name="hint_key_password">Anahtar parolası</string>
     <string name="msg_exported">Dışa aktarıldı</string>
     <string name="msg_copied_to_clipboard">Kopyalandı</string>
-    <string name="msg_key_compat_mode_help">Bazı sunucular sınırlı Unicode desteğine sahiptir. Eski tuş olayları, İngilizce olmayan metinlerin girilmesine yardımcı olabilir.</string>
     <string name="msg_export_auth_required">Sunucuları dışa aktarmak için kimliğinizi doğrulayın</string>
     <string name="pref_tools_summary">İçe/dışa aktarma, hata ayıklama</string>
     <string name="pref_theme">Tema</string>
@@ -201,7 +199,6 @@
     <string name="hint_ssh_port">SSH bağlantı noktası</string>
     <string name="msg_zoom_locked">Yakınlaştırma kilitlendi</string>
     <string name="msg_zoom_unlocked">Yakınlaştırma kilidi açıldı</string>
-    <string name="msg_pk_password_not_saved">AVNC güvenliği artırmak için artık özel anahtar parolalarını kaydetmiyor.</string>
     <string name="pref_keep_screen_on">Ekranı açık tut</string>
     <string name="pref_toolbar_open_with_swipe">Açmak için kenardan içeri kaydır</string>
     <string name="pref_show_gesture_style_toggle">Hareket biçimi geçişini göster</string>

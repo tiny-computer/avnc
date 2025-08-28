@@ -68,8 +68,10 @@ class AppPreferences(context: Context) {
         val vkOpenWithKeyboard; get() = prefs.getBoolean("vk_open_with_keyboard", false)
         val vkShowAll; get() = prefs.getBoolean("vk_show_all", false)
         var vkLayout by StringPref("vk_keys_layout", null)
+        val vkRowCount; get() = prefs.getString("vk_row_count", null)?.toIntOrNull() ?: 2
 
         val mousePassthrough; get() = prefs.getBoolean("mouse_passthrough", true)
+        val capturePointer; get() = mousePassthrough && prefs.getBoolean("capture_pointer", true)
         val hideLocalCursor; get() = prefs.getBoolean("hide_local_cursor", true)
         val hideRemoteCursor; get() = prefs.getBoolean("hide_remote_cursor", false)
         val mouseBack; get() = prefs.getString("mouse_back", "right-click")!!

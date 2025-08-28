@@ -142,6 +142,17 @@ class KeyHandlerTest {
     }
 
     @Test
+    fun altShift6() {
+        sendDown(KeyEvent.KEYCODE_SHIFT_LEFT)
+        sendDown(KeyEvent.KEYCODE_ALT_LEFT)
+        sendKeyWithMeta(KeyEvent.KEYCODE_6, KeyEvent.META_SHIFT_ON or KeyEvent.META_ALT_ON)
+        assertEquals(XKeySym.XK_Shift_L, dispatchedKeyDowns[0])
+        assertEquals(XKeySym.XK_Alt_L, dispatchedKeyDowns[1])
+        assertEquals('^'.code, dispatchedKeyDowns[2])
+        assertEquals('^'.code, dispatchedKeyUps[0])
+    }
+
+    @Test
     fun charWithCapslock() {
         sendKeyWithMeta(KeyEvent.KEYCODE_A, KeyEvent.META_CAPS_LOCK_ON)
         assertEquals('A'.code, dispatchedKeyDowns.firstOrNull())
@@ -481,6 +492,12 @@ class KeyHandlerTest {
 
         assertEquals(XKeySym.XK_Super_L, dispatchedKeyDowns[0])
         assertEquals(XKeySym.XK_Super_L, dispatchedKeyDowns[1])
+
+        // Alt press with scan code (from hardware keyboard)
+        val altScanCode = 100
+        keyHandler.onKeyEvent(KeyEvent(0L, 0L, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ALT_RIGHT, 0, KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON, 123, altScanCode))
+        assertEquals(XKeySym.XK_Super_L, dispatchedKeyDowns[2])
+        assertEquals(0, dispatchedXTDowns.count { it != 0 })
     }
 
 

@@ -8,6 +8,8 @@
 @file:JvmName("VncActivityUtils")
 package com.gaurav.avnc.ui.vnc
 
+import android.animation.LayoutTransition
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
@@ -22,6 +24,7 @@ import android.util.Log
 import android.util.Rational
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -36,6 +39,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.gaurav.avnc.R
 import com.gaurav.avnc.databinding.ActivityVncBinding
+import com.gaurav.avnc.databinding.NoVideoOverlayBinding
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.util.DeviceAuthPrompt
 import com.gaurav.avnc.util.SamsungDex
@@ -123,6 +127,7 @@ class VncActivity : AppCompatActivity() {
 
         setupLayout()
         setupServerUnlock()
+        setupNoVideoOverlay()
 
         //Observers
         binding.reconnectBtn.setOnClickListener { retryConnection() }
@@ -130,7 +135,7 @@ class VncActivity : AppCompatActivity() {
         viewModel.confirmationRequest.observe(this) { showConfirmationDialog() }
         viewModel.activeGestureStyle.observe(this) { dispatcher.onGestureStyleChanged() }
         viewModel.state.observe(this) { onClientStateChanged(it) }
-        viewModel.profileLive.observe(this) { onProfileUpdated(it) }
+        viewModel.profileLive.observe(this) { onProfileUpdated() }
 
         autoReconnectDelay = intent.getIntExtra(AUTO_RECONNECT_DELAY_KEY, 5)
         savedInstanceState?.let {
@@ -149,8 +154,8 @@ class VncActivity : AppCompatActivity() {
         //   been closed by the server while app process was frozen in background
         // - It also attempts to fix some unusual cases of old updates requests being lost while AVNC
         //   was frozen by the system
-        if (viewModel.pref.viewer.pauseUpdatesInBackground)
-            viewModel.resumeFrameBufferUpdates()
+        if (viewModel.pref.viewer.pauseUpdatesInBackground && !viewModel.videoDisabled)
+            viewModel.setFrameBufferUpdatesPaused(false)
         else if (wasConnectedWhenStopped)
             viewModel.refreshFrameBuffer()
     }
@@ -160,7 +165,7 @@ class VncActivity : AppCompatActivity() {
         virtualKeys.releaseMetaKeys()
         binding.frameView.onPause()
         if (viewModel.pref.viewer.pauseUpdatesInBackground)
-            viewModel.pauseFrameBufferUpdates()
+            viewModel.setFrameBufferUpdatesPaused(true)
         wasConnectedWhenStopped = viewModel.state.value.isConnected
     }
 
@@ -203,8 +208,7 @@ class VncActivity : AppCompatActivity() {
         }
     }
 
-    private fun onProfileUpdated(profile: ServerProfile) {
-        keyHandler.emitLegacyKeysym = true /*profile.fLegacyKeySym*/
+    private fun onProfileUpdated() {
         setupOrientation()
     }
 
@@ -240,6 +244,45 @@ class VncActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupNoVideoOverlay() {
+        viewModel.activeViewMode.observe(this) {
+            if (viewModel.videoDisabled) {
+                inflateNoVideoOverlay()
+                binding.noVideoOverlayStub.root?.isVisible = true
+            } else {
+                binding.noVideoOverlayStub.root?.isVisible = false
+            }
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun inflateNoVideoOverlay() {
+        if (binding.noVideoOverlayStub.isInflated)
+            return
+
+        binding.noVideoOverlayStub.viewStub?.inflate()
+        val stubBinding = binding.noVideoOverlayStub.binding as NoVideoOverlayBinding
+        val rootView = stubBinding.overlayRoot
+        val tapIndicator = stubBinding.tapIndicator
+
+        // Tap indicator should appear immediately, but disappear with animation
+        rootView.layoutTransition?.setDuration(LayoutTransition.APPEARING, 0)
+
+        rootView.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN,
+                MotionEvent.ACTION_MOVE -> tapIndicator.apply {
+                    isVisible = true
+                    translationX = event.x - (width / 2)
+                    translationY = event.y - (height / 2)
+                }
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> tapIndicator.isVisible = false
+            }
+            touchHandler.onTouchEvent(event)
+        }
+    }
+
     private fun showLoginDialog() {
         LoginFragment().show(supportFragmentManager, "LoginDialog")
     }
@@ -265,6 +308,7 @@ class VncActivity : AppCompatActivity() {
         SamsungDex.setMetaKeyCapture(this, isConnected)
         layoutManager.onConnectionStateChanged()
         updateStatusContainerVisibility(isConnected)
+        updatePointerCapture()
         autoReconnect(newState)
 
         if (isConnected) {
@@ -284,6 +328,17 @@ class VncActivity : AppCompatActivity() {
     private fun incrementUseCount() {
         viewModel.profile.useCount += 1
         viewModel.saveProfile()
+    }
+
+    private fun updatePointerCapture() {
+        if (Build.VERSION.SDK_INT < 26 || !viewModel.pref.input.capturePointer)
+            return
+
+        if (viewModel.state.value.isConnected) {
+            binding.frameView.requestFocus()
+            binding.frameView.requestPointerCapture()
+        } else
+            binding.frameView.releasePointerCapture()
     }
 
     private fun updateStatusContainerVisibility(isConnected: Boolean) {
@@ -368,7 +423,10 @@ class VncActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         layoutManager.onWindowFocusChanged(hasFocus)
-        if (hasFocus) viewModel.sendClipboardText()
+        if (hasFocus) {
+            viewModel.sendClipboardText()
+            updatePointerCapture()
+        }
     }
 
 
@@ -454,6 +512,8 @@ class VncActivity : AppCompatActivity() {
         //giving apps a chance to handle it. For better or worse, they set the 'source'
         //for such key events to Mouse, enabling the following workarounds.
         if (keyEvent.keyCode == KeyEvent.KEYCODE_BACK &&
+            keyEvent.scanCode == 0 &&
+            keyEvent.flags and KeyEvent.FLAG_VIRTUAL_HARD_KEY == 0 &&
             InputDevice.getDevice(keyEvent.deviceId)?.supportsSource(InputDevice.SOURCE_MOUSE) == true &&
             viewModel.pref.input.interceptMouseBack) {
             if (keyEvent.action == KeyEvent.ACTION_DOWN)

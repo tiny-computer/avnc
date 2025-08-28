@@ -28,7 +28,6 @@
     <string name="title_vnc_login">Accesso VNC</string>
     <string name="title_ssh_login">Accesso SSH</string>
     <string name="title_forget">Dimentica</string>
-    <string name="title_key_compat_mode">Inviare eventi chiave legacy</string>
     <string name="title_button_up_delay">Inviare eventu click ritardati</string>
     <string name="title_orientation">Orientamento</string>
     <string name="title_image_quality_raw">Raw</string>
@@ -70,7 +69,6 @@
     <string name="msg_invalid_key_file">File chiave privata invalido</string>
     <string name="msg_invalid_vnc_uri">VNC URL invalida</string>
     <string name="msg_tap_to_select_a_key">Clicca per selezionare chiave:</string>
-    <string name="msg_key_compat_mode_help">Alcuni server hanno un supporto Unicode limitato. Gli eventi chiave legacy possono aiutare a inserire testo non inglese.</string>
     <string name="msg_button_up_delay_help">Ritardare gli eventi di clic può essere d\'aiuto in alcuni rari casi se un\'app non risponde ai clic.</string>
     <string name="msg_shortcut_server_deleted">Questo server è stato rimosso</string>
     <string name="msg_viewer_tips_label">Un paio di consigli per iniziare</string>
@@ -106,7 +104,6 @@
     <string name="title_source_code">Codice sorgente</string>
     <string name="msg_about_app">Un client VNC veloce e sicuro. Visualizza e controlla da remoto qualsiasi dispositivo che esegue un server VNC.\n\n\nAVNC è un software open source e copyleft —realizzato con l\'aiuto di molti collaboratori.</string>
     <string name="msg_server_profile_added">Server aggiunto</string>
-    <string name="msg_pk_password_not_saved">AVNC non salva la password della chiave privata per migliorare la sicurezza.</string>
     <string name="msg_copied_to_clipboard">Copiato</string>
     <string name="title_unknown_ssh_host">Host SSH sconosciuto</string>
     <string name="title_continue">Continua</string>

@@ -15,8 +15,6 @@ import java.net.InterfaceAddress
 import java.net.NetworkInterface
 import java.nio.ByteBuffer
 
-private const val BROADCAST_PORT = 9
-
 /**
  * Parses given MAC address.
  * Throws an exception if it is not a valid MAC address.
@@ -27,17 +25,35 @@ fun parseMacAddress(macAddress: String): ByteArray {
 }
 
 /**
+ * Coverts to [InetAddress].
+ */
+fun parseBroadcastAddress(address: String): InetAddress {
+    try {
+        return InetAddress.getByName(address)
+    } catch (t: Throwable) {
+        throw IllegalArgumentException("Invalid broadcast address", t)
+    }
+}
+
+
+/**
  * Broadcasts Wake-on-LAN magic packet for [macAddress] to all available networks.
  * Cannot be called from main thread.
  */
-fun broadcastWoLPackets(macAddress: String) {
+fun broadcastWoLPackets(macAddress: String, broadcastAddress: String, port: Int) {
     val macBytes = parseMacAddress(macAddress)
-    val addresses = getBroadcastAddresses()
+    val addresses = mutableSetOf<InetAddress>()
 
-    check(addresses.isNotEmpty()) { "No network interface is active" }
+    if (broadcastAddress.isNotBlank())
+        addresses += parseBroadcastAddress(broadcastAddress)
+
+    if (broadcastAddress.isBlank() || broadcastAddress == "255.255.255.255")
+        addresses += getSystemBroadcastAddresses()
+
+    check(addresses.isNotEmpty()) { "No broadcast address available" }
     addresses.forEach { addr ->
         val socket = DatagramSocket().apply { broadcast = true }
-        val packet = createMagicPacket(macBytes, addr)
+        val packet = createMagicPacket(macBytes, addr, port)
 
         socket.use { it.send(packet) }
     }
@@ -46,7 +62,7 @@ fun broadcastWoLPackets(macAddress: String) {
 /**
  * Returns list of all broadcast addresses available on this system.
  */
-private fun getBroadcastAddresses(): List<InetAddress> {
+private fun getSystemBroadcastAddresses(): List<InetAddress> {
     return NetworkInterface.getNetworkInterfaces().asSequence()
             .filter { it.isUp && !it.isLoopback }
             .map { it.interfaceAddresses }
@@ -58,11 +74,11 @@ private fun getBroadcastAddresses(): List<InetAddress> {
 /**
  * Creates WoL magic packet targeted at given broadcast address.
  */
-private fun createMagicPacket(macBytes: ByteArray, broadcastAddress: InetAddress): DatagramPacket {
+private fun createMagicPacket(macBytes: ByteArray, broadcastAddress: InetAddress, port: Int): DatagramPacket {
     check(macBytes.size == 6)
     val payload = ByteBuffer.allocate(6 + (16 * 6)).apply {
         repeat(6) { put(255.toByte()) }
         repeat(16) { put(macBytes) }
     }
-    return DatagramPacket(payload.array(), payload.array().size, broadcastAddress, BROADCAST_PORT)
+    return DatagramPacket(payload.array(), payload.array().size, broadcastAddress, port)
 }

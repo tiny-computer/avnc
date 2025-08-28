@@ -54,6 +54,7 @@ class Dispatcher(private val activity: VncActivity) {
     private val viewModel = activity.viewModel
     private val messenger = viewModel.messenger
     private val gesturePref = viewModel.pref.input.gesture
+    val accelerator = PointerAcceleration(viewModel)
 
 
     /**************************************************************************
@@ -155,6 +156,11 @@ class Dispatcher(private val activity: VncActivity) {
     fun onMouseScroll(p: PointF, hs: Float, vs: Float) = directMode.doRemoteScrollFromMouse(p, hs, vs)
     fun onMouseBack(p: PointF) = config.mouseBackAction(p)
 
+    fun onCapturedMouseButtonDown(button: PointerButton) = relativeMode.doButtonDown(button, PointF())
+    fun onCapturedMouseButtonUp(button: PointerButton) = relativeMode.doButtonUp(button, PointF())
+    fun onCapturedMouseMove(dx: Float, dy: Float) = relativeMode.doMovePointer(dx, dy, false)
+    fun onCapturedMouseScroll(hs: Float, vs: Float) = relativeMode.doRemoteScrollFromMouse(PointF(), hs, vs)
+
     fun onStylusTap(p: PointF) = directMode.doClick(PointerButton.Left, p)
     fun onStylusDoubleTap(p: PointF) = directMode.doDoubleClick(PointerButton.Left, p)
     fun onStylusLongPress(p: PointF) = directMode.doClick(PointerButton.Right, p)
@@ -255,7 +261,10 @@ class Dispatcher(private val activity: VncActivity) {
          * [vs] Movement of vertical scroll wheel
          */
         fun doRemoteScrollFromMouse(p: PointF, hs: Float, vs: Float) {
-            doRemoteScroll(p, hs * deltaPerScroll, vs * deltaPerScroll)
+            // hs is -ve for for left and +ve for right. But doRemoteScroll() works
+            // in terms of finger movement where -ve is right and +ve is left
+            // So we have to invert the sign of hs for doRemoteScroll()
+            doRemoteScroll(p, -1 * hs * deltaPerScroll, vs * deltaPerScroll)
         }
     }
 
@@ -314,14 +323,24 @@ class Dispatcher(private val activity: VncActivity) {
 
         override fun transformPoint(p: PointF) = pointerPosition
 
-        override fun doMovePointer(p: PointF, dx: Float, dy: Float) {
+        override fun doMovePointer(p: PointF, dx: Float, dy: Float) = doMovePointer(dx, dy, true)
+
+        fun doMovePointer(dx: Float, dy: Float, accelerate: Boolean) {
             val xLimit = viewModel.frameState.fbWidth - 1
             val yLimit = viewModel.frameState.fbHeight - 1
             if (xLimit < 0 || yLimit < 0)
                 return
 
+            var adx = dx
+            var ady = dy
+            if (accelerate) {
+                accelerator.compute()
+                adx = accelerator.updateDx(dx)
+                ady = accelerator.updateDy(dy)
+            }
+
             pointerPosition.apply {
-                offset(dx, dy)
+                offset(adx, ady)
                 x = x.coerceIn(0f, xLimit)
                 y = y.coerceIn(0f, yLimit)
             }
