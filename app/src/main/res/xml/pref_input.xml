@@ -123,12 +123,6 @@
             app:title="@string/pref_mouse_passthrough" />
 
         <SwitchPreference
-            app:defaultValue="false"
-            app:dependency="mouse_passthrough"
-            app:key="capture_pointer"
-            app:title="@string/pref_capture_pointer" />
-
-        <SwitchPreference
             app:defaultValue="true"
             app:dependency="mouse_passthrough"
             app:key="capture_pointer"
