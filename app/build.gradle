@@ -16,8 +16,8 @@ android {
     defaultConfig {
         minSdk 21
         targetSdk 35
-        versionCode 44
-        versionName "2.9.1"
+        versionCode 45
+        versionName "3.0.0"
 
         buildConfigField "String", "VERSION_NAME", "\"${version}\""
         buildConfigField "int", "VERSION_CODE", "${versionCode}"
@@ -118,7 +118,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.tiny-computer'
             artifactId = 'avnc'
-            version = '2.9.1'
+            version = '3.0.0'
 
             afterEvaluate {
                 from components.release
