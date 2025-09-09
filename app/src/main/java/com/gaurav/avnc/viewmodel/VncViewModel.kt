@@ -414,13 +414,13 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      * In portrait mode, safe area is used instead of window to exclude the keyboard.
      */
     fun resizeRemoteDesktop() {
-        if (state.value.isConnected && profile.resizeRemoteDesktop && !videoDisabled)
-            frameState.let {
-                if (it.windowWidth > it.windowHeight)
-                    messenger.setDesktopSize(it.windowWidth.toInt(), it.windowHeight.toInt())
-                else
-                    messenger.setDesktopSize(it.safeArea.width().toInt(), it.safeArea.height().toInt())
-            }
+        if (state.value.isConnected && profile.resizeRemoteDesktop && !videoDisabled) frameState.let {
+            val scaleFactor = profile.resizeRemoteDesktopScaleFactor
+            if (it.windowWidth > it.windowHeight)
+                messenger.setDesktopSize((it.windowWidth * scaleFactor).toInt(), (it.windowHeight * scaleFactor).toInt())
+            else
+                messenger.setDesktopSize((it.safeArea.width() * scaleFactor).toInt(), (it.safeArea.height() * scaleFactor).toInt())
+        }
     }
 
     fun setFrameBufferUpdatesPaused(paused: Boolean) {

@@ -159,6 +159,9 @@ data class ServerProfile(
          */
         var resizeRemoteDesktop: Boolean = false,
 
+        @ColumnInfo(defaultValue = "1.0")
+        var resizeRemoteDesktopScaleFactor: Float = 1.0f,
+
         /**
          * Enable Wake-on-LAN
          */
