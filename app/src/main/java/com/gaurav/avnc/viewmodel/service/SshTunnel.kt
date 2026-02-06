@@ -15,20 +15,19 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.gaurav.avnc.R
-import com.gaurav.avnc.model.LoginInfo
 import com.gaurav.avnc.model.ServerProfile
-import com.gaurav.avnc.util.getKnownHostsFile
-import com.gaurav.avnc.viewmodel.VncViewModel
 import com.trilead.ssh2.Connection
 import com.trilead.ssh2.KnownHosts
 import com.trilead.ssh2.LocalPortForwarder
 import com.trilead.ssh2.ServerHostKeyVerifier
+import com.trilead.ssh2.crypto.OpenSSHKeyEncoder
 import com.trilead.ssh2.crypto.PEMDecoder
+import com.trilead.ssh2.crypto.PEMStructure
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.Closeable
+import java.io.File
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -43,26 +42,20 @@ import java.security.MessageDigest
  * Known hosts & keys are stored in a file inside app's private storage.
  * For unknown host, user is prompted to confirm the key.
  */
-class HostKeyVerifier(private val viewModel: VncViewModel) : ServerHostKeyVerifier {
-
-    private val knownHostsFile = getKnownHostsFile(viewModel.app)
-
-    private val knownHosts = KnownHosts(knownHostsFile)
+class HostKeyVerifier(private val observer: SshTunnel.Observer) : ServerHostKeyVerifier {
 
     override fun verifyServerHostKey(hostname: String, port: Int, keyAlgorithm: String, key: ByteArray): Boolean {
-        val verification = knownHosts.verifyHostkey(hostname, keyAlgorithm, key)
+        val knownHostsFile = observer.getKnownSshHostsFile()
+        val knownHosts = KnownHosts(knownHostsFile)
+        val verificationResult = knownHosts.verifyHostkey(hostname, keyAlgorithm, key)
 
-        if (verification == KnownHosts.HOSTKEY_IS_OK)
+        if (verificationResult == KnownHosts.HOSTKEY_IS_OK)
             return true
 
-        // New key, confirm with user
+        // Unknown key, confirm with user
         val keyDigest = MessageDigest.getInstance("SHA-256").digest(key)
         val keyDigestStr = Base64.encodeToString(keyDigest, Base64.NO_PADDING)
-
-        var titleRes = R.string.title_unknown_ssh_host
-        if (verification == KnownHosts.HOSTKEY_HAS_CHANGED)
-            titleRes = R.string.title_ssh_host_key_changed
-        val title = viewModel.app.getString(titleRes)
+        val isNew = (verificationResult == KnownHosts.HOSTKEY_IS_NEW)
         val message = """
                  |
                  |Host:   $hostname
@@ -71,12 +64,12 @@ class HostKeyVerifier(private val viewModel: VncViewModel) : ServerHostKeyVerifi
                  |  
                  |SHA256:$keyDigestStr
                  |
-                 |Please make sure your are connecting to the valid host.
+                 |Make sure your are connecting to correct SSH host.
                  |
-                 |If you continue, this host & key will be marked as known.
+                 |If you continue, this key will be added to trusted list.
                  """.trimMargin()
 
-        if (viewModel.confirmationRequest.requestResponse(Pair(title, message))) {
+        if (observer.confirmSshHostKeyWithUser(message, isNew)) {
             //User has confirmed the key, so remember it.
             KnownHosts.addHostkeyToFile(knownHostsFile, arrayOf(hostname), keyAlgorithm, key)
             return true
@@ -84,6 +77,46 @@ class HostKeyVerifier(private val viewModel: VncViewModel) : ServerHostKeyVerifi
 
         return false
     }
+}
+
+/**
+ * Handler for PEM encoded private keys
+ */
+class PemKey(source: String) {
+    private var keyPair: KeyPair? = null
+    private val ps: PEMStructure?
+
+    init {
+        if (source.contains("-----BEGIN PRIVATE KEY-----")) {
+            ps = null
+            keyPair = parsePKCS8Key(source)
+        } else {
+            ps = PEMDecoder.parsePEM(source.toCharArray())
+            if (!PEMDecoder.isPEMEncrypted(ps))
+                keyPair = PEMDecoder.decode(ps, "")
+        }
+
+        check(keyPair != null || ps != null) { "Unsupported private key file" }
+    }
+
+    private fun parsePKCS8Key(key: String): KeyPair {
+        val pkBytes = key.substringAfter("-----BEGIN PRIVATE KEY-----")
+                .substringBefore("-----END PRIVATE KEY-----")
+                .let { kotlin.io.encoding.Base64.Mime.decode(it) }
+
+        return OpenSSHKeyEncoder.recoverKeyPair(pkBytes)
+    }
+
+    fun isEncrypted(): Boolean {
+        return keyPair == null && PEMDecoder.isPEMEncrypted(ps)
+    }
+
+    fun decrypt(password: String) {
+        checkNotNull(ps)
+        keyPair = PEMDecoder.decode(ps, password)
+    }
+
+    fun getKeyPair() = keyPair!!
 }
 
 /**
@@ -103,17 +136,23 @@ class SshTunnelException(message: String = "", cause: Throwable? = null) : IOExc
 /**
  * Manager for SSH Tunnel
  */
-class SshTunnel(private val viewModel: VncViewModel) {
+class SshTunnel(private val observer: Observer) {
+
+    interface Observer {
+        fun getKnownSshHostsFile(): File
+        fun confirmSshHostKeyWithUser(message: String, isNewHost: Boolean): Boolean
+        fun getSshPassword(): String
+        fun getSshKeyPassword(): String
+    }
 
     private var connection: Connection? = null
     private val localHost = "127.0.0.1"
 
     /**
-     * Opens the tunnel according to current profile in [viewModel].
+     * Opens the tunnel according to [profile]
      */
-    fun open(): TunnelGate {
+    fun open(profile: ServerProfile): TunnelGate {
         check(connection == null) { "Connection already open" }
-        val profile = viewModel.profile
 
         connection = connect(profile)
         authenticate(connection!!, profile)
@@ -133,7 +172,7 @@ class SshTunnel(private val viewModel: VncViewModel) {
     private fun connect(profile: ServerProfile): Connection {
         for (address in InetAddress.getAllByName(profile.sshHost)) {
             try {
-                return Connection(address.hostAddress, profile.sshPort).apply { connect(HostKeyVerifier(viewModel)) }
+                return Connection(address.hostAddress, profile.sshPort).apply { connect(HostKeyVerifier(observer)) }
             } catch (e: IOException) {
                 if (e.cause is NoRouteToHostException) continue
                 else throw unwrapLibraryException(e)
@@ -146,7 +185,7 @@ class SshTunnel(private val viewModel: VncViewModel) {
     private fun authenticate(connection: Connection, profile: ServerProfile) {
         when (profile.sshAuthType) {
             ServerProfile.SSH_AUTH_PASSWORD -> {
-                val password = viewModel.getLoginInfo(LoginInfo.Type.SSH_PASSWORD).password  //Possibly blocking call
+                val password = observer.getSshPassword()  //Possibly blocking call
                 connection.authenticateWithPassword(profile.sshUsername, password)
                 if (!connection.isAuthenticationComplete)
                     throw SshTunnelException("SSH Password authentication failed")
@@ -157,12 +196,12 @@ class SshTunnel(private val viewModel: VncViewModel) {
                 if (cached != null) {
                     connection.authenticateWithPublicKey(profile.sshUsername, cached)
                 } else {
-                    val pem = PEMDecoder.parsePEM(pk.toCharArray())
-                    var password = ""
-                    if (PEMDecoder.isPEMEncrypted(pem)) {
-                        password = viewModel.getLoginInfo(LoginInfo.Type.SSH_KEY_PASSWORD).password  //Blocking call
+                    val pemKey = PemKey(pk)
+                    if (pemKey.isEncrypted()) {
+                        val password = observer.getSshKeyPassword()  //Blocking call
+                        pemKey.decrypt(password)
                     }
-                    val keyPair = PEMDecoder.decode(pem, password)
+                    val keyPair = pemKey.getKeyPair()
                     connection.authenticateWithPublicKey(profile.sshUsername, keyPair)
                     KeyCache.put(pk, keyPair)
                 }
@@ -201,7 +240,7 @@ class SshTunnel(private val viewModel: VncViewModel) {
 
     /**
      * In many error conditions, SSHLib throws [IOException] with a generic message
-     * like 'An error happened when connecting'. This gives not indication to the user about
+     * like 'An error happened when connecting'. This gives no indication to users about
      * actual cause of the error. So this function attempts to find the root cause of the
      * error, and provide a better message to the user.
      */

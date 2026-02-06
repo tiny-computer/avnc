@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2020  Gaurav Ujjwal.
+ * Copyright (c) 2025  Gaurav Ujjwal.
  *
  * SPDX-License-Identifier:  GPL-3.0-or-later
  *
  * See COPYING.txt for more details.
  */
 
-package com.gaurav.avnc.ui.vnc
+package com.gaurav.avnc.ui.vnc.input
 
 import android.os.Build
 import android.view.KeyCharacterMap
@@ -84,23 +84,15 @@ import com.gaurav.avnc.vnc.XTKeyCode
  */
 class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPreferences) {
 
-    var processedEventObserver: ((KeyEvent) -> Unit)? = null
     var enableMacOSCompatibility = false
-    var emitLegacyKeysym = true
-    var vkMetaState = 0
+    private var emitLegacyKeysym = true  // Hardcoded to true
+    private var vkMetaState = 0
     private var hasSentShiftDown = false
     private var hasSentCtrlDown = false
     private var hasSentAltDown = false
     private val inputPref = prefs.input
     private val kcm by lazy { KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD) }
 
-    /**
-     * Shortcut to send both up & down events
-     */
-    fun onKey(keyCode: Int) {
-        onKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-        onKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
-    }
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (shouldIgnoreEvent(event))
@@ -110,6 +102,11 @@ class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPrefe
 
         postProcessEvent(event)
         return handled
+    }
+
+    fun onVkKeyEvent(event: KeyEvent): Boolean {
+        updateVkMetaState(event)
+        return onKeyEvent(event)
     }
 
     /************************************************************************************
@@ -276,7 +273,7 @@ class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPrefe
             val isAccent = uChar and KeyCharacterMap.COMBINING_ACCENT != 0
             val maskedChar = uChar and KeyCharacterMap.COMBINING_ACCENT_MASK
 
-            if ((!isAccent && accentSequence.size == 0) ||  // No tracking yet (most common case)
+            if ((!isAccent && accentSequence.isEmpty()) ||  // No tracking yet (most common case)
                 (!isAccent && isUp && !accentSequence.contains(maskedChar)) || // Spurious key-ups
                 (KeyEvent.isModifierKey(keyCode))) { // Modifier keys are passed-on to the server
                 ++i
@@ -519,8 +516,25 @@ class KeyHandler(private val dispatcher: Dispatcher, private val prefs: AppPrefe
 
         if (isAltKey(event.keyCode))
             hasSentAltDown = event.action == KeyEvent.ACTION_DOWN
+    }
 
-        processedEventObserver?.invoke(event)
+    private fun updateVkMetaState(vkEvent: KeyEvent) {
+        val metaKeyFlag = when (vkEvent.keyCode) {
+            KeyEvent.KEYCODE_SHIFT_LEFT -> KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+            KeyEvent.KEYCODE_SHIFT_RIGHT -> KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_RIGHT_ON
+            KeyEvent.KEYCODE_CTRL_LEFT -> KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+            KeyEvent.KEYCODE_CTRL_RIGHT -> KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_RIGHT_ON
+            KeyEvent.KEYCODE_ALT_LEFT -> KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
+            KeyEvent.KEYCODE_ALT_RIGHT -> KeyEvent.META_ALT_ON or KeyEvent.META_ALT_RIGHT_ON
+            KeyEvent.KEYCODE_META_LEFT -> KeyEvent.META_META_ON or KeyEvent.META_META_LEFT_ON
+            KeyEvent.KEYCODE_META_RIGHT -> KeyEvent.META_META_ON or KeyEvent.META_META_RIGHT_ON
+            else -> return
+        }
+
+        if (vkEvent.action == KeyEvent.ACTION_DOWN)
+            vkMetaState = vkMetaState or metaKeyFlag
+        else
+            vkMetaState = vkMetaState and metaKeyFlag.inv()
     }
 
     /**

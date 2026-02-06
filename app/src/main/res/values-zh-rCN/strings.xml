@@ -228,11 +228,13 @@
     <string name="msg_input_disabled">停用了输入</string>
     <string name="msg_video_disabled">停用了视频</string>
     <string name="msg_gesture_style_locked_to_touchpad">“触摸板”手势样式活跃中</string>
-    <string name="msg_view_only_checkbox_migration">现在可以停用会话中的输入直播</string>
     <string name="desc_view_modes_toggle">查看模式</string>
     <string name="desc_view_mode_normal">常规模式</string>
     <string name="desc_view_mode_no_input">停用所有输入</string>
     <string name="desc_view_mode_no_video">停用视频</string>
     <string name="pref_capture_pointer">捕获指针</string>
     <string name="pref_vk_row_count">行数</string>
+    <string name="pref_gesture_action_remote_back_press">在服务器上按返回</string>
+    <string name="pref_vk_use_super_with_single_tap">单次轻按使用超级键</string>
+    <string name="pref_bell">响铃</string>
 </resources>

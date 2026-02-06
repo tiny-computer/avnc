@@ -10,6 +10,7 @@ package com.gaurav.avnc.vnc
 
 import com.gaurav.avnc.TestServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.security.cert.X509Certificate
@@ -18,16 +19,20 @@ class VncClientTest {
 
     open class TestObserver : VncClient.Observer {
         var cutText = ""
+        var username = ""
+        var password = ""
 
-        override fun onPasswordRequired() = ""
-        override fun onCredentialRequired() = UserCredential()
-        override fun onVerifyCertificate(certificate: X509Certificate) = false
+        override fun getVncPassword() = password
+        override fun getVncCredentials() = UserCredential(username, password)
+        override fun verifyVncServerCertificate(certificate: X509Certificate) = false
         override fun onFramebufferUpdated() {}
         override fun onFramebufferSizeChanged(width: Int, height: Int) {}
         override fun onPointerMoved(x: Int, y: Int) {}
-        override fun onGotXCutText(text: String) {
+        override fun onCutTextReceived(text: String) {
             cutText = text
         }
+
+        override fun onBell() {}
     }
 
 
@@ -101,5 +106,33 @@ class VncClientTest {
         client.cleanup()
         server.awaitStop()
         assertEquals(sampleTextWithAccent, server.receivedCutText)
+    }
+
+    @Test
+    fun vncAuth() {
+        val testPassword = "Pivot!"
+        server.setupVncAuth(testPassword)
+        observer.password = testPassword
+
+        connect()
+        assertTrue(client.connected)
+
+        client.cleanup()
+        server.awaitStop()
+    }
+
+    @Test
+    fun dhAuth() {
+        val testUsername = "Ross"
+        val testPassword = "Pivot!"
+        server.setupDHAuth(testUsername, testPassword)
+        observer.username = testUsername
+        observer.password = testPassword
+
+        connect()
+        assertTrue(client.connected)
+
+        client.cleanup()
+        server.awaitStop()
     }
 }

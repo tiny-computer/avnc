@@ -41,6 +41,7 @@ import androidx.viewpager.widget.ViewPager
 import com.gaurav.avnc.R
 import com.gaurav.avnc.databinding.VirtualKeysBinding
 import com.gaurav.avnc.util.AppPreferences
+import com.gaurav.avnc.util.addOnGlobalLayoutListener
 import kotlin.math.min
 import kotlin.math.sign
 
@@ -51,11 +52,11 @@ import kotlin.math.sign
  *
  * This class manages the inflation & visibility of virtual keys.
  */
-class VirtualKeys(activity: VncActivity) {
+class VirtualKeys(private val activity: VncActivity) {
 
     private val viewModel = activity.viewModel
     private val pref = activity.viewModel.pref
-    private val keyHandler = activity.keyHandler
+    private val inputHandler = activity.inputHandler
     private val frameView = activity.binding.frameView
     private val stub = activity.binding.virtualKeysStub
     private val toggleKeys = mutableSetOf<ToggleButton>()
@@ -142,7 +143,7 @@ class VirtualKeys(activity: VncActivity) {
         initTextPage(binding)
         initKeys(binding)
         initPager(binding)
-        keyHandler.processedEventObserver = ::onAfterKeyEvent
+        inputHandler.onAfterKeyEventListeners += ::onAfterKeyEvent
     }
 
     /**
@@ -184,6 +185,7 @@ class VirtualKeys(activity: VncActivity) {
                     if (position == textPageIndex) binding.textBox.requestFocus()
                     else frameView.requestFocus()
                 }
+                pref.runInfo.virtualKeysTextBoxVisible = (position == textPageIndex)
             }
         })
 
@@ -197,12 +199,16 @@ class VirtualKeys(activity: VncActivity) {
         root.layoutParams = root.layoutParams.apply { width = keys.measuredWidth; height = keys.measuredHeight }
 
         // Update size after layout changes
-        keys.viewTreeObserver.addOnGlobalLayoutListener {
+        addOnGlobalLayoutListener(activity, keys) {
             val w = min(keys.width, frameView.width)
             val h = keys.height
             if (w > 0 && h > 0 && (root.width != w || root.height != h))
                 root.layoutParams = root.layoutParams.apply { width = w; height = h }
         }
+
+        // Switch to text page if it was active last time
+        if (pref.runInfo.virtualKeysTextBoxVisible)
+            pager.setCurrentItem(pages.indexOf(binding.textPage), false)
     }
 
 
@@ -257,6 +263,13 @@ class VirtualKeys(activity: VncActivity) {
             if (key.isChecked) lockedToggleKeys.add(key)
             true
         }
+
+        if ((keyCode == KeyEvent.KEYCODE_META_LEFT || keyCode == KeyEvent.KEYCODE_META_RIGHT) && pref.input.vkUseSuperWithSingleTap)
+            key.setOnClickListener {
+                key.isChecked = true
+                key.isChecked = false
+            }
+
         toggleKeys.add(key)
     }
 
@@ -304,39 +317,17 @@ class VirtualKeys(activity: VncActivity) {
         val text = textBox.text?.ifEmpty { "\n" }?.toString() ?: return
         val events = keyCharMap.getEvents(text.toCharArray())
 
-        // Temporarily clear vkMetaState, so it doesn't affect the following events
-        val vkMetaState = keyHandler.vkMetaState
-        keyHandler.vkMetaState = 0
+        // Release Meta keys to avoid interference with these key events
+        releaseMetaKeys()
 
+        // These events are sent to KeyHandler.onKeyEvent() instead of onVkKeyEvent()
+        // to treat these like normal system key events.
         if (events == null)
-            keyHandler.onKeyEvent(KeyEvent(SystemClock.uptimeMillis(), text, 0, 0))
+            inputHandler.onKeyEvent(KeyEvent(SystemClock.uptimeMillis(), text, 0, 0))
         else
-            events.forEach { keyHandler.onKeyEvent(it) }
+            events.forEach { inputHandler.onKeyEvent(it) }
 
-        keyHandler.vkMetaState = vkMetaState
         textBox.setText("")
-    }
-
-    private fun updateMetaState(keyCode: Int, isDown: Boolean) {
-        val metaKeyFlag = when (keyCode) {
-            KeyEvent.KEYCODE_SHIFT_LEFT -> KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
-            KeyEvent.KEYCODE_SHIFT_RIGHT -> KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_RIGHT_ON
-            KeyEvent.KEYCODE_CTRL_LEFT -> KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
-            KeyEvent.KEYCODE_CTRL_RIGHT -> KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_RIGHT_ON
-            KeyEvent.KEYCODE_ALT_LEFT -> KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
-            KeyEvent.KEYCODE_ALT_RIGHT -> KeyEvent.META_ALT_ON or KeyEvent.META_ALT_RIGHT_ON
-            KeyEvent.KEYCODE_META_LEFT -> KeyEvent.META_META_ON or KeyEvent.META_META_LEFT_ON
-            KeyEvent.KEYCODE_META_RIGHT -> KeyEvent.META_META_ON or KeyEvent.META_META_RIGHT_ON
-            else -> return
-        }
-
-        var metaState = keyHandler.vkMetaState
-        if (isDown)
-            metaState = metaState or metaKeyFlag
-        else
-            metaState = metaState and metaKeyFlag.inv()
-
-        keyHandler.vkMetaState = metaState
     }
 
     private fun sendKey(keyCode: Int) {
@@ -346,8 +337,7 @@ class VirtualKeys(activity: VncActivity) {
 
     private fun sendKey(keyCode: Int, isDown: Boolean) {
         val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
-        updateMetaState(keyCode, isDown)
-        keyHandler.onKeyEvent(KeyEvent(action, keyCode))
+        inputHandler.onVkKeyEvent(KeyEvent(action, keyCode))
     }
 }
 
@@ -385,10 +375,10 @@ enum class VirtualKey(
     CloseKeys(description = "Close virtual keys", icon = R.drawable.ic_clear),
 
     // Meta keys
-    RightShift(keyCode = KeyEvent.KEYCODE_SHIFT_RIGHT, label = "Shift", isToggle = true),
-    RightCtrl(keyCode = KeyEvent.KEYCODE_CTRL_RIGHT, label = "Ctrl", isToggle = true),
-    RightAlt(keyCode = KeyEvent.KEYCODE_ALT_RIGHT, label = "Alt", isToggle = true),
-    RightSuper(keyCode = KeyEvent.KEYCODE_META_RIGHT, label = "Super", icon = R.drawable.ic_super_key, isToggle = true),
+    LeftShift(keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, label = "Shift", isToggle = true),
+    LeftCtrl(keyCode = KeyEvent.KEYCODE_CTRL_LEFT, label = "Ctrl", isToggle = true),
+    LeftAlt(keyCode = KeyEvent.KEYCODE_ALT_LEFT, label = "Alt", isToggle = true),
+    LeftSuper(keyCode = KeyEvent.KEYCODE_META_LEFT, label = "Super", icon = R.drawable.ic_super_key, isToggle = true),
 
     Esc(keyCode = KeyEvent.KEYCODE_ESCAPE),
     Tab(keyCode = KeyEvent.KEYCODE_TAB),
@@ -425,8 +415,8 @@ enum class VirtualKey(
  */
 object VirtualKeyLayoutConfig {
 
-    private val DEFAULT_LAYOUT = listOf(VirtualKey.ToggleKeyboard, VirtualKey.CloseKeys, VirtualKey.Esc, VirtualKey.RightSuper,
-                                        VirtualKey.Tab, VirtualKey.RightCtrl, VirtualKey.RightShift, VirtualKey.RightAlt,
+    private val DEFAULT_LAYOUT = listOf(VirtualKey.ToggleKeyboard, VirtualKey.CloseKeys, VirtualKey.Esc, VirtualKey.LeftSuper,
+                                        VirtualKey.Tab, VirtualKey.LeftCtrl, VirtualKey.LeftShift, VirtualKey.LeftAlt,
                                         VirtualKey.Home, VirtualKey.Left, VirtualKey.Up, VirtualKey.Down, VirtualKey.End,
                                         VirtualKey.Right, VirtualKey.PgUp, VirtualKey.PgDn)
 

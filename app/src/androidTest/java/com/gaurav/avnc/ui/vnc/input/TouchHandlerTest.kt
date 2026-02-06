@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2021  Gaurav Ujjwal.
+ * Copyright (c) 2025  Gaurav Ujjwal.
  *
  * SPDX-License-Identifier:  GPL-3.0-or-later
  *
  * See COPYING.txt for more details.
  */
 
-package com.gaurav.avnc.ui.vnc
+package com.gaurav.avnc.ui.vnc.input
 
 import android.graphics.Point
 import android.graphics.PointF
@@ -18,16 +18,19 @@ import android.view.MotionEvent.PointerProperties
 import android.view.ViewConfiguration
 import androidx.core.content.edit
 import androidx.test.filters.SdkSuppress
+import com.gaurav.avnc.CleanPrefsRule
 import com.gaurav.avnc.instrumentation
 import com.gaurav.avnc.targetConfigContext
 import com.gaurav.avnc.targetContext
 import com.gaurav.avnc.targetPrefs
+import com.gaurav.avnc.ui.vnc.FrameView
 import com.gaurav.avnc.util.AppPreferences
 import com.gaurav.avnc.vnc.PointerButton
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -39,6 +42,10 @@ import org.junit.Test
  */
 @SdkSuppress(minSdkVersion = 28)
 class TouchHandlerTest {
+
+    @JvmField
+    @Rule
+    val prefRule = CleanPrefsRule()
 
     /************************* Setup  ************************************************************/
     private lateinit var touchHandler: TouchHandler
@@ -78,6 +85,16 @@ class TouchHandlerTest {
     }
 
     @Test
+    fun singleTapQuick() {
+        targetPrefs.edit { putString("gesture_double_tap_swipe", "none") }
+        setup()
+
+        sendDown()
+        sendUp()
+        verify { mockDispatcher.onTap1(testPoint) }
+    }
+
+    @Test
     fun doubleTap() {
         sendDown()
         sendUp()
@@ -85,6 +102,18 @@ class TouchHandlerTest {
         sendDown()
         sendUp()
         verify { mockDispatcher.onDoubleTap(testPoint) }
+    }
+
+    @Test
+    fun doubleTapQuick() {
+        targetPrefs.edit { putString("gesture_double_tap_swipe", "none") }
+        setup()
+
+        sendDown()
+        sendUp()
+        sendDown()
+        sendUp()
+        verify(exactly = 2) { mockDispatcher.onTap1(testPoint) }
     }
 
     @Test

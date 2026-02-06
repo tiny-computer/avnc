@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.view.View
 import android.view.WindowManager.LayoutParams.TYPE_TOAST
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.preference.PreferenceManager
@@ -38,12 +39,15 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers
 import androidx.test.espresso.matcher.RootMatchers
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
+import androidx.test.espresso.matcher.ViewMatchers.isCompletelyDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.viewpager2.widget.ViewPager2
 import junit.framework.AssertionFailedError
 import org.hamcrest.Description
 import org.hamcrest.Matcher
+import org.hamcrest.Matchers
 import org.hamcrest.TypeSafeMatcher
 import org.hamcrest.core.IsNot.not
 import org.junit.Assert
@@ -106,6 +110,8 @@ fun ViewInteraction.performWithTimeout(action: ViewAction, timeout: Int = 5000):
  */
 fun ViewInteraction.checkIsDisplayed() = check(matches(isDisplayed()))!!
 fun ViewInteraction.checkWillBeDisplayed() = checkWithTimeout(matches(isDisplayed()))
+fun ViewInteraction.checkWillBeCompletelyDisplayed() = checkWithTimeout(matches(isCompletelyDisplayed()))
+fun ViewInteraction.checkWillBeHidden() = checkWithTimeout(matches(not(isDisplayed())))
 fun ViewInteraction.checkIsNotDisplayed() = check(matches(not(isDisplayed())))!!
 fun ViewInteraction.doClick() = perform(click())!!
 fun ViewInteraction.doLongClick() = perform(longClick())!!
@@ -207,5 +213,19 @@ object ViewPager2Actions {
             view.setCurrentItem(view.currentItem + 1, false)
             uiController.loopMainThreadUntilIdle()
         }
+    }
+}
+
+class ScrollToBottom : ViewAction {
+    override fun getConstraints() = Matchers.allOf(isDisplayed(), isAssignableFrom(ScrollView::class.java))!!
+    override fun getDescription() = "Scrolls to the bottom of a ScrollView"
+
+    override fun perform(uiController: UiController?, view: View?) {
+        val scrollView = view as ScrollView
+        val smoothScrollEnabled = scrollView.isSmoothScrollingEnabled
+
+        scrollView.isSmoothScrollingEnabled = false
+        scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+        scrollView.isSmoothScrollingEnabled = smoothScrollEnabled
     }
 }

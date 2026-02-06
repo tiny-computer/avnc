@@ -88,7 +88,6 @@
     <string name="msg_video_disabled">Video disabled</string>
     <string name="msg_gesture_style_locked_to_touchpad">\'Touchpad\' gesture style is active</string>
     <!--Temporary message for view mode migration -->
-    <string name="msg_view_only_checkbox_migration">You can now disable input live in a session</string>
     <string name="msg_zoom_locked">Zoom locked</string>
     <string name="msg_zoom_unlocked">Zoom unlocked</string>
     <string name="msg_zoom_reset">Zoom reset to 100%</string>
@@ -174,12 +173,14 @@
     <string name="pref_gesture_action_remote_scroll">Scroll remote content</string>
     <string name="pref_gesture_action_remote_drag">Drag remote content</string>
     <string name="pref_gesture_action_remote_drag_middle">Drag with middle button</string>
+    <string name="pref_gesture_action_remote_back_press">Back-press on server</string>
     <string name="pref_gesture_action_open_keyboard">Open keyboard</string>
 
     <string name="pref_theme">Theme</string>
     <string name="pref_theme_option_system">System</string>
     <string name="pref_theme_option_dark">Dark</string>
     <string name="pref_theme_option_light">Light</string>
+    <string name="pref_bell">Bell</string>
     <string name="pref_prefer_advanced_editor">Directly open advanced server options</string>
     <string name="pref_sort_server_list">Sort saved servers by name</string>
     <string name="pref_gesture">Gestures</string>
@@ -216,6 +217,7 @@
     <string name="pref_customize_virtual_keys">Customize keys</string>
     <string name="pref_vk_open_with_keyboard">Open with keyboard</string>
     <string name="pref_vk_row_count">Rows</string>
+    <string name="pref_vk_use_super_with_single_tap">Use Super key with single tap</string>
     <string name="pref_km">Key mappings</string>
     <string name="pref_km_right_alt_to_super">Right Alt → Super</string>
     <string name="pref_km_language_switch_to_super">Language Switch → Super</string>

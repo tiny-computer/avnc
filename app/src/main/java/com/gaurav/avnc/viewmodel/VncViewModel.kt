@@ -10,18 +10,22 @@ package com.gaurav.avnc.viewmodel
 
 import android.app.Application
 import android.graphics.RectF
+import android.media.ToneGenerator
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.gaurav.avnc.R
 import com.gaurav.avnc.model.LoginInfo
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.ui.vnc.FrameScroller
 import com.gaurav.avnc.ui.vnc.FrameState
 import com.gaurav.avnc.ui.vnc.FrameView
 import com.gaurav.avnc.util.LiveRequest
+import com.gaurav.avnc.util.Tones
 import com.gaurav.avnc.util.broadcastWoLPackets
 import com.gaurav.avnc.util.getClipboardText
+import com.gaurav.avnc.util.getKnownHostsFile
 import com.gaurav.avnc.util.getUnknownCertificateMessage
 import com.gaurav.avnc.util.isCertificateTrusted
 import com.gaurav.avnc.util.setClipboardText
@@ -182,7 +186,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      */
     val messenger = Messenger(client)
 
-    private val sshTunnel = SshTunnel(this)
+    private val sshTunnel = SshTunnel(SshTunnelObserver())
 
     /**
      * Used to confirm something with user before continuing.
@@ -263,7 +267,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
                 client.connect(profile.host, profile.port)
 
             ServerProfile.CHANNEL_SSH_TUNNEL ->
-                sshTunnel.open().use {
+                sshTunnel.open(profile).use {
                     client.connect(it.host, it.port)
                 }
 
@@ -476,15 +480,15 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      * [VncClient.Observer] Implementation
      **************************************************************************/
 
-    override fun onPasswordRequired(): String {
+    override fun getVncPassword(): String {
         return getLoginInfo(LoginInfo.Type.VNC_PASSWORD).password
     }
 
-    override fun onCredentialRequired(): UserCredential {
+    override fun getVncCredentials(): UserCredential {
         return getLoginInfo(LoginInfo.Type.VNC_CREDENTIAL).let { UserCredential(it.username, it.password) }
     }
 
-    override fun onVerifyCertificate(certificate: X509Certificate): Boolean {
+    override fun verifyVncServerCertificate(certificate: X509Certificate): Boolean {
         if (isCertificateTrusted(app, certificate))
             return true
 
@@ -501,7 +505,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
         frameViewRef.get()?.requestRender()
     }
 
-    override fun onGotXCutText(text: String) {
+    override fun onCutTextReceived(text: String) {
         receiveClipboardText(text)
     }
 
@@ -513,5 +517,32 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
 
     override fun onPointerMoved(x: Int, y: Int) {
         frameViewRef.get()?.requestRender()
+    }
+
+    override fun onBell() {
+        if (pref.ui.bell) {
+            Tones.notify(ToneGenerator.TONE_PROP_BEEP)
+        }
+    }
+
+    /**************************************************************************
+     * [SshTunnel.Observer] Implementation
+     **************************************************************************/
+    private inner class SshTunnelObserver : SshTunnel.Observer {
+        override fun getKnownSshHostsFile() = getKnownHostsFile(app)
+
+        override fun getSshPassword(): String {
+            return getLoginInfo(LoginInfo.Type.SSH_PASSWORD).password
+        }
+
+        override fun getSshKeyPassword(): String {
+            return getLoginInfo(LoginInfo.Type.SSH_KEY_PASSWORD).password
+        }
+
+        override fun confirmSshHostKeyWithUser(message: String, isNewHost: Boolean): Boolean {
+            val titleRes = if (isNewHost) R.string.title_unknown_ssh_host else R.string.title_ssh_host_key_changed
+            val title = app.getString(titleRes)
+            return confirmationRequest.requestResponse(Pair(title, message))
+        }
     }
 }

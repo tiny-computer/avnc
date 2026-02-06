@@ -24,6 +24,7 @@ class AppPreferences(context: Context) {
 
     inner class UI {
         val theme = StringLivePref("theme", "system")
+        var bell by BooleanPref("bell_enabled", true)
         var preferAdvancedEditor by BooleanPref("prefer_advanced_editor", false)
         val sortServerList = BooleanLivePref("sort_server_list", false)
     }
@@ -60,6 +61,7 @@ class AppPreferences(context: Context) {
         val longPressDetectionEnabled; get() = (longPress != "none" || longPressSwipeEnabled)
         val swipeSensitivity; get() = prefs.getInt("gesture_swipe_sensitivity", 10) / 10f
         val invertVerticalScrolling; get() = prefs.getBoolean("invert_vertical_scrolling", false)
+        val quickTap1Enabled; get() = ((doubleTap == "none" || doubleTap == "double-click") && doubleTapSwipe == "none")
     }
 
     inner class Input {
@@ -69,6 +71,7 @@ class AppPreferences(context: Context) {
         val vkShowAll; get() = prefs.getBoolean("vk_show_all", false)
         var vkLayout by StringPref("vk_keys_layout", null)
         val vkRowCount; get() = prefs.getString("vk_row_count", null)?.toIntOrNull() ?: 2
+        val vkUseSuperWithSingleTap; get() = prefs.getBoolean("vk_use_super_with_single_tap", false)
 
         val mousePassthrough; get() = prefs.getBoolean("mouse_passthrough", true)
         val capturePointer; get() = mousePassthrough && prefs.getBoolean("capture_pointer", true)
@@ -98,7 +101,8 @@ class AppPreferences(context: Context) {
     inner class RunInfo {
         var hasShownViewerHelp by BooleanPref("run_info_has_shown_viewer_help", false)
         var hasShownV3WelcomeMsg by BooleanPref("run_info_has_shown_v3_welcome_msg", false)
-        var showVirtualKeys by BooleanPref("run_info_show_virtual_keys", false)
+        var showVirtualKeys by BooleanPref("run_info_show_virtual_keys", true)
+        var virtualKeysTextBoxVisible by BooleanPref("run_info_virtual_keys_textbox_visible", false)
         var toolbarOpenerBtnVerticalBias by FloatPref("run_info_toolbar_opener_vertical_bias", .5f)
     }
 
@@ -163,6 +167,18 @@ class AppPreferences(context: Context) {
         if (prefs.getBoolean("run_info_has_connected_successfully", false)) prefs.edit {
             remove("run_info_has_connected_successfully")
             putBoolean("run_info_has_shown_viewer_help", true)
+        }
+
+        if (!prefs.getBoolean("run_info_right_meta_keys_migrated", false)) prefs.edit {
+            prefs.getString("vk_keys_layout", null)?.let { old ->
+                val new = old
+                        .replace("RightShift", "LeftShift")
+                        .replace("RightCtrl", "LeftCtrl")
+                        .replace("RightAlt", "LeftAlt")
+                        .replace("RightSuper", "LeftSuper")
+                putString("vk_keys_layout", new)
+            }
+            putBoolean("run_info_right_meta_keys_migrated", true)
         }
     }
 }

@@ -52,15 +52,14 @@ class VncClient(private val observer: Observer) {
      * There is NO guarantee about which thread will invoke [Observer] methods.
      */
     interface Observer {
-        fun onPasswordRequired(): String
-        fun onCredentialRequired(): UserCredential
-        fun onVerifyCertificate(certificate: X509Certificate): Boolean
-        fun onGotXCutText(text: String)
+        fun getVncPassword(): String
+        fun getVncCredentials(): UserCredential
+        fun verifyVncServerCertificate(certificate: X509Certificate): Boolean
+        fun onCutTextReceived(text: String)
         fun onFramebufferUpdated()
         fun onFramebufferSizeChanged(width: Int, height: Int)
         fun onPointerMoved(x: Int, y: Int)
-
-        //fun onBell()
+        fun onBell()
     }
 
     /**
@@ -101,6 +100,11 @@ class VncClient(private val observer: Observer) {
      */
     var pointerX = 0; private set
     var pointerY = 0; private set
+
+    /**
+     * Cursor info, used by Renderer
+     */
+    var cursorInfo = CursorInfo()
 
     /**
      * Client-side cursor rendering creates a synchronization issue.
@@ -342,10 +346,10 @@ class VncClient(private val observer: Observer) {
     }
 
     /**
-     * Upload cursor shape into framebuffer texture.
+     * Upload cursor contents in currently active OpenGL texture
      */
-    fun uploadCursor() = ifConnected {
-        nativeUploadCursor(nativePtr, pointerX, pointerY)
+    fun uploadCursorTexture() = ifConnected {
+        nativeUploadCursorTexture(nativePtr)
     }
 
     /**
@@ -431,24 +435,24 @@ class VncClient(private val observer: Observer) {
     private external fun nativeGetHeight(clientPtr: Long): Int
     private external fun nativeIsEncrypted(clientPtr: Long): Boolean
     private external fun nativeUploadFrameTexture(clientPtr: Long)
-    private external fun nativeUploadCursor(clientPtr: Long, px: Int, py: Int)
+    private external fun nativeUploadCursorTexture(clientPtr: Long)
     private external fun nativeGetLastErrorStr(): String
     private external fun nativeIsServerMacOS(clientPtr: Long): Boolean
     private external fun nativeInterrupt(clientPtr: Long)
     private external fun nativeCleanup(clientPtr: Long)
 
     @Keep
-    private fun cbGetPassword() = observer.onPasswordRequired()
+    private fun cbGetPassword() = observer.getVncPassword()
 
     @Keep
-    private fun cbGetCredential() = observer.onCredentialRequired()
+    private fun cbGetCredential() = observer.getVncCredentials()
 
     @Keep
     private fun cbVerifyServerCertificate(der: ByteArray): Boolean {
         val cert = ByteArrayInputStream(der).use {
             CertificateFactory.getInstance("X.509").generateCertificate(it)
         }
-        return observer.onVerifyCertificate(cert as X509Certificate)
+        return observer.verifyVncServerCertificate(cert as X509Certificate)
     }
 
     @Keep
@@ -457,7 +461,7 @@ class VncClient(private val observer: Observer) {
             val cutText = it.decode(ByteBuffer.wrap(bytes)).toString()
             if (cutText != lastCutText) {
                 lastCutText = cutText
-                observer.onGotXCutText(cutText)
+                observer.onCutTextReceived(cutText)
             }
         }
     }
@@ -470,12 +474,18 @@ class VncClient(private val observer: Observer) {
 
 
     @Keep
-    private fun cbBell() = Unit // observer.onBell()
+    private fun cbBell() = observer.onBell()
 
     @Keep
     private fun cbHandleCursorPos(x: Int, y: Int) {
         if (!ignorePointerMovesByServer)
             moveClientPointer(x, y)
+    }
+
+    @Keep
+    private fun cbHandleCursorInfo(width: Int, height: Int, xHot: Int, yHot: Int) {
+        cursorInfo = CursorInfo(width, height, xHot, yHot)
+        cbFinishedFrameBufferUpdate() // Fake call to trigger rendering
     }
 
 

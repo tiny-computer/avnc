@@ -10,14 +10,18 @@ package com.gaurav.avnc.ui.pref
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers
 import androidx.test.espresso.matcher.ViewMatchers.withSubstring
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.rules.ActivityScenarioRule
+import androidx.test.filters.SdkSuppress
+import com.gaurav.avnc.BiometricMocking
 import com.gaurav.avnc.R
 import com.gaurav.avnc.checkIsDisplayed
 import com.gaurav.avnc.checkIsNotDisplayed
@@ -29,11 +33,9 @@ import com.gaurav.avnc.model.db.MainDb
 import com.gaurav.avnc.setupFileOpenIntent
 import com.gaurav.avnc.targetContext
 import com.gaurav.avnc.ui.prefs.PrefsActivity
-import com.gaurav.avnc.util.DeviceAuthPrompt
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert
-import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -60,10 +62,8 @@ class ImportExportTest {
 
 
     @Test
+    @SdkSuppress(minSdkVersion = 28)
     fun exportWithoutSecrets() {
-        // This test requires an unlocked device
-        activityRule.scenario.onActivity { Assume.assumeFalse(DeviceAuthPrompt(it).canLaunch()) }
-
         // Insert sample data
         val sampleName = "Days of our Lives"
         val sampleSecret = "Drake Ramoray"
@@ -76,7 +76,9 @@ class ImportExportTest {
                 .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(file.toUri())))
 
         // Export
+        BiometricMocking.start()
         onView(withText(R.string.title_export)).doClick()
+        BiometricMocking.endWithSuccess()
         onView(withText(R.string.msg_exported)).checkWillBeDisplayed()
         onView(withSubstring("Error")).checkIsNotDisplayed()
 
@@ -89,10 +91,8 @@ class ImportExportTest {
 
 
     @Test
+    @SdkSuppress(minSdkVersion = 28)
     fun exportWithSecrets() {
-        // This test requires an unlocked device
-        activityRule.scenario.onActivity { Assume.assumeFalse(DeviceAuthPrompt(it).canLaunch()) }
-
         // Insert sample data
         val sampleName = "Days of our Lives"
         val sampleSecret = "Drake Ramoray"
@@ -105,8 +105,10 @@ class ImportExportTest {
                 .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(file.toUri())))
 
         // Export
+        BiometricMocking.start()
         onView(withText(R.string.title_export_passwords_and_keys)).doClick() // Check
         onView(withText(R.string.title_export)).doClick()
+        BiometricMocking.endWithSuccess()
         onView(withText(R.string.msg_exported)).checkWillBeDisplayed()
         onView(withSubstring("Error")).checkIsNotDisplayed()
 
@@ -115,6 +117,29 @@ class ImportExportTest {
         val data = file.bufferedReader().use { it.readText() }
         Assert.assertTrue("Exported data: `$data` should contain `$sampleName`", data.contains(sampleName))
         Assert.assertTrue("Exported data: `$data` should contain `$sampleSecret`", data.contains(sampleSecret))
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 28)
+    fun exportFailsOnIncorrectBiometric() {
+        BiometricMocking.start()
+        onView(withText(R.string.title_export_passwords_and_keys)).doClick()
+        onView(withText(R.string.title_export)).doClick()
+
+        val errorMessage = "You shall not pass!!!"
+        BiometricMocking.endWithError(errorMessage)
+        onView(withSubstring(errorMessage)).checkWillBeDisplayed()
+        onView(withText(R.string.msg_exported)).check(doesNotExist())
+        Intents.assertNoUnverifiedIntents()
+    }
+
+    @Test
+    fun missingFilePickerApp() {
+        Intents.intending(IntentMatchers.hasAction(Intent.ACTION_CREATE_DOCUMENT))
+                .respondWithFunction { throw ActivityNotFoundException() }
+
+        onView(withText(R.string.title_export)).doClick()
+        onView(withSubstring("No app found to choose backup file")).checkWillBeDisplayed()
     }
 
 
