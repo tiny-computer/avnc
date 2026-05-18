@@ -42,7 +42,7 @@ import kotlin.random.Random
 class TestServer(name: String = "Friends") {
 
     //Protocol config
-    private val protocol = "RFB 003.008\n"
+    private var protocol = "RFB 003.008\n"
     private val serverName = name.toByteArray()
     private val frameWidth: Short = 10
     private val frameHeight: Short = 10
@@ -107,6 +107,12 @@ class TestServer(name: String = "Friends") {
         securityTypes.add(0, 30 /*DHAuth*/)
     }
 
+    fun setProtocolString(proto: String) {
+        check(!serverJob.isAlive)
+        check(proto.length == 12)
+        protocol = proto
+    }
+
     /**
      * Behold The Server
      */
@@ -159,9 +165,11 @@ class TestServer(name: String = "Friends") {
         }
         output.write(toByteArray(if (successful) 0 else 1))  // Security result
         if (!successful) {
-            output.write(toByteArray(securityFailReason.length))
-            output.write(securityFailReason.toByteArray())
-            socket.close()
+            runCatching {
+                output.write(toByteArray(securityFailReason.length))
+                output.write(securityFailReason.toByteArray())
+                socket.close()
+            }
             return
         }
 

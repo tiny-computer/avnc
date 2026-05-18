@@ -9,39 +9,41 @@
 package com.gaurav.avnc.viewmodel
 
 import android.app.Application
+import android.content.pm.ActivityInfo
 import android.graphics.RectF
 import android.media.ToneGenerator
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
 import com.gaurav.avnc.R
 import com.gaurav.avnc.model.LoginInfo
 import com.gaurav.avnc.model.ServerProfile
+import com.gaurav.avnc.session.RemoteSession
 import com.gaurav.avnc.ui.vnc.FrameScroller
 import com.gaurav.avnc.ui.vnc.FrameState
 import com.gaurav.avnc.ui.vnc.FrameView
 import com.gaurav.avnc.util.LiveRequest
 import com.gaurav.avnc.util.Tones
-import com.gaurav.avnc.util.broadcastWoLPackets
+import com.gaurav.avnc.util.debugCheck
 import com.gaurav.avnc.util.getClipboardText
 import com.gaurav.avnc.util.getKnownHostsFile
 import com.gaurav.avnc.util.getUnknownCertificateMessage
 import com.gaurav.avnc.util.isCertificateTrusted
+import com.gaurav.avnc.util.isTrue
+import com.gaurav.avnc.util.monitor
 import com.gaurav.avnc.util.setClipboardText
 import com.gaurav.avnc.util.trustCertificate
-import com.gaurav.avnc.viewmodel.VncViewModel.State.Companion.isConnected
-import com.gaurav.avnc.viewmodel.service.SshTunnel
-import com.gaurav.avnc.vnc.Messenger
+import com.gaurav.avnc.viewmodel.service.SshClient
+import com.gaurav.avnc.session.Messenger
 import com.gaurav.avnc.vnc.UserCredential
 import com.gaurav.avnc.vnc.VncClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runBlocking
 import java.io.IOException
 import java.lang.ref.WeakReference
 import java.security.cert.X509Certificate
-import kotlin.concurrent.thread
 
 /**
  * ViewModel for VncActivity
@@ -80,7 +82,7 @@ import kotlin.concurrent.thread
  * via OpenGL ES. [frameState] is read from this thread to decide how/where frame
  * should be drawn.
  */
-class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
+class VncViewModel(app: Application) : BaseViewModel(app) {
 
     /**
      * Connection lifecycle:
@@ -102,11 +104,6 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
         Connecting,
         Connected,
         Disconnected;
-
-        companion object {
-            val State?.isConnected get() = (this == Connected)
-            val State?.isDisconnected get() = (this == Disconnected)
-        }
     }
 
     lateinit var profile: ServerProfile
@@ -116,7 +113,9 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      */
     val profileLive = MutableLiveData<ServerProfile>()
 
-    val client = VncClient(this)
+    var client: VncClient? = null
+
+    private val session = RemoteSession(RemoteSessionObserver())
 
     /**
      * We have two places for connection state (both are synced):
@@ -125,6 +124,8 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      * [state]               - More granular, used by observers & data binding
      */
     val state = MutableLiveData(State.Created)
+
+    val connected get() = state.value == State.Connected
 
     /**
      * Reason for disconnecting.
@@ -135,12 +136,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      * Fired when we need some credentials from user.
      * It will trigger the Login dialog.
      */
-    val loginInfoRequest = LiveRequest<LoginInfo.Type, LoginInfo>(LoginInfo(), viewModelScope)
-
-    /**
-     * Fired to unlock saved servers.
-     */
-    val serverUnlockRequest = LiveRequest<Any?, Boolean>(false, viewModelScope)
+    val loginInfoRequest = LiveRequest<LoginInfo.Type, LoginInfo>()
 
     /**
      * List of saved profiles.
@@ -184,21 +180,45 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
     /**
      * Used for sending events to remote server.
      */
-    val messenger = Messenger(client)
-
-    private val sshTunnel = SshTunnel(SshTunnelObserver())
+    var messenger: Messenger? = null
 
     /**
      * Used to confirm something with user before continuing.
      * This is mostly used to warn about unknown SSH host, x509 certificates etc.
      * This request accepts two strings: First is used as title, second contains the message.
      */
-    val confirmationRequest = LiveRequest<Pair<String, String>, Boolean>(false, viewModelScope)
+    val confirmationRequest = LiveRequest<Pair<String, String>, Boolean>()
+
+    /**
+     * If user has asked to remember credentials in login dialog, we need to
+     * save them to database. But we don't want to save them immediately
+     * because user might have mistyped them. So, we wait until successful
+     * connection before saving them.
+     */
+    var loginInfoToBeRemembered = mutableListOf<LoginInfo>()
+
+    /**
+     * Whether activity window is currently focused
+     */
+    val hasWindowFocus = MutableLiveData<Boolean>()
+
+    /**
+     * Whether viewer help is being shown
+     */
+    val viewerHelpIsVisible = MutableLiveData<Boolean>()
+
+    /**
+     * Whether activity is in Picture-in-Picture mode
+     */
+    val inPiPMode = MutableLiveData<Boolean>()
+
+    val preferredScreenOrientation = monitor(profileLive) { resolveScreenOrientation() }
+
+    val capturePointer = monitor(state, hasWindowFocus, viewerHelpIsVisible) { resolveCapturePointer() }
 
     override fun onCleared() {
         super.onCleared()
-        if (state.value != State.Disconnected)
-            client.interrupt()
+        session.stop()
     }
 
 
@@ -218,77 +238,9 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
             frameState.setZoom(profile.zoom1, profile.zoom2)
             setViewMode(profile.viewMode)
             resolveGestureStyle()
-            launchConnection()
+            inPiPMode.observeForever { if (it) resetZoom() }
+            session.start(profile)
         }
-    }
-
-    private fun launchConnection() {
-        thread(name = "VncConnection") {
-            runCatching {
-
-                preConnect()
-                connect()
-                processMessages()
-
-            }.onFailure {
-                if (it is IOException) disconnectReason.postValue(it.message)
-                Log.e(javaClass.simpleName, "Connection failed", it)
-            }
-
-            state.postValue(State.Disconnected)
-            cleanup()
-        }
-    }
-
-    private fun preConnect() {
-        if (profile.ID != 0L && pref.server.lockSavedServer)
-            if (!serverUnlockRequest.requestResponse(null))
-                throw IOException("Could not unlock server")
-
-        client.configure(profile.securityType, true  /* Hardcoded to true */,
-                         profile.imageQuality, profile.useRawEncoding)
-
-        if (profile.useRepeater)
-            client.setupRepeater(profile.idOnRepeater)
-
-        if (profile.enableWol)
-            runCatching { broadcastWoLPackets(profile.wolMAC, profile.wolBroadcastAddress, profile.wolPort) }
-                    .onFailure {
-                        launchMain {
-                            Toast.makeText(app, "Wake-on-LAN: ${it.message}", Toast.LENGTH_LONG).show()
-                            Log.w("WakeOnLAN", "Cannot send WoL packet", it)
-                        }
-                    }
-    }
-
-    private fun connect() {
-        when (profile.channelType) {
-            ServerProfile.CHANNEL_TCP ->
-                client.connect(profile.host, profile.port)
-
-            ServerProfile.CHANNEL_SSH_TUNNEL ->
-                sshTunnel.open(profile).use {
-                    client.connect(it.host, it.port)
-                }
-
-            else -> throw IOException("Unknown Channel: ${profile.channelType}")
-        }
-
-        state.postValue(State.Connected)
-
-        // Initial sync, slightly delayed to allow extended clipboard negotiations
-        launchIO { delay(1000L); sendClipboardText() }
-    }
-
-    private fun processMessages() {
-        while (viewModelScope.isActive)
-            client.processServerMessage()
-    }
-
-    private fun cleanup() {
-        messenger.cleanup()
-        client.cleanup()
-        sshTunnel.close()
     }
 
     /**
@@ -308,41 +260,33 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
     fun updateZoom(scaleFactor: Float, fx: Float, fy: Float) {
         if (profile.fZoomLocked || videoDisabled) return
 
-        val appliedScaleFactor = frameState.updateZoom(scaleFactor)
-
-        //Calculate how much the focus would shift after scaling
-        val dfx = (fx - frameState.frameX) * (appliedScaleFactor - 1)
-        val dfy = (fy - frameState.frameY) * (appliedScaleFactor - 1)
-
-        //Translate in opposite direction to keep the focus fixed on screen
-        frameState.pan(-dfx, -dfy)
-
-        frameViewRef.get()?.requestRender()
+        frameState.updateZoom(scaleFactor, fx, fy)
+        refreshFrameView()
     }
 
     fun resetZoom() {
         frameState.setZoom(1f, 1f)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     fun resetZoomToDefault() {
         frameState.setZoom(profile.zoom1, profile.zoom2)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     fun setZoom(zoom1: Float, zoom2: Float) {
         frameState.setZoom(zoom1, zoom2)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     fun panFrame(deltaX: Float, deltaY: Float) {
         frameState.pan(deltaX, deltaY)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     fun moveFrameTo(x: Float, y: Float) {
         frameState.moveTo(x, y)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     fun toggleZoomLock(enabled: Boolean) {
@@ -358,7 +302,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
 
     fun setSafeArea(safeArea: RectF) {
         frameState.setSafeArea(safeArea)
-        frameViewRef.get()?.requestRender()
+        refreshFrameView()
     }
 
     /**************************************************************************
@@ -366,15 +310,15 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      **************************************************************************/
 
     fun sendClipboardText() {
-        if (pref.server.clipboardSync && client.connected) launchIO {
-            getClipboardText(app)?.let { messenger.sendClipboardText(it) }
+        if (pref.server.clipboardSync && connected) launchIO {
+            getClipboardText(app)?.let { messenger?.sendClipboardText(it) }
         }
     }
 
     fun sendStringViaClipboard(text: String) {
-        if (pref.server.sendStringViaClipboard && client.connected) {
+        if (pref.server.sendStringViaClipboard && connected) {
             Log.d("VncViewModel", "sendPastedText: $text")
-            messenger.sendStringViaClipboard(text)
+            messenger?.sendStringViaClipboard(text)
         }
     }
 
@@ -396,21 +340,16 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
     }
 
     fun getLoginInfo(type: LoginInfo.Type): LoginInfo {
-        val vu = profile.username
-        val vp = profile.password
-        val sp = profile.sshPassword
+        val li = LoginInfo.fromProfile(profile, type)
 
-        if (type == LoginInfo.Type.VNC_PASSWORD && vp.isNotBlank())
-            return LoginInfo(password = vp)
-
-        if (type == LoginInfo.Type.VNC_CREDENTIAL && vu.isNotBlank() && vp.isNotBlank())
-            return LoginInfo(username = vu, password = vp)
-
-        if (type == LoginInfo.Type.SSH_PASSWORD && sp.isNotBlank())
-            return LoginInfo(password = sp)
+        // If info is already available, return it
+        if ((type == LoginInfo.Type.VNC_PASSWORD && li.password.isNotBlank()) ||
+            (type == LoginInfo.Type.VNC_CREDENTIAL && li.username.isNotBlank() && li.password.isNotBlank()) ||
+            (type == LoginInfo.Type.SSH_PASSWORD && li.password.isNotBlank()))
+            return li
 
         // Something is missing, so we have to ask the user
-        return loginInfoRequest.requestResponse(type)  // Blocking call
+        return loginInfoRequest.getResponseFor(type)  // Blocking call
     }
 
     /**
@@ -418,21 +357,22 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
      * In portrait mode, safe area is used instead of window to exclude the keyboard.
      */
     fun resizeRemoteDesktop() {
-        if (state.value.isConnected && profile.resizeRemoteDesktop && !videoDisabled) frameState.let {
-            val scaleFactor = profile.resizeRemoteDesktopScaleFactor
-            if (it.windowWidth > it.windowHeight)
-                messenger.setDesktopSize((it.windowWidth * scaleFactor).toInt(), (it.windowHeight * scaleFactor).toInt())
-            else
-                messenger.setDesktopSize((it.safeArea.width() * scaleFactor).toInt(), (it.safeArea.height() * scaleFactor).toInt())
-        }
+        if (connected && profile.resizeRemoteDesktop && !videoDisabled)
+            frameState.let {
+                val scaleFactor = profile.resizeRemoteDesktopScaleFactor
+                if (it.windowWidth > it.windowHeight)
+                    messenger?.setDesktopSize((it.windowWidth * scaleFactor).toInt(), (it.windowHeight * scaleFactor).toInt())
+                else
+                    messenger?.setDesktopSize((it.safeArea.width() * scaleFactor).toInt(), (it.safeArea.height() * scaleFactor).toInt())
+            }
     }
 
     fun setFrameBufferUpdatesPaused(paused: Boolean) {
-        messenger.setFrameBufferUpdatesPaused(paused)
+        messenger?.setFrameBufferUpdatesPaused(paused)
     }
 
     fun refreshFrameBuffer() {
-        messenger.refreshFrameBuffer()
+        messenger?.refreshFrameBuffer()
     }
 
     /**
@@ -470,65 +410,139 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
 
         if (activeViewMode.value != newMode) {
             activeViewMode.value = newMode
-            client.setInputDisabled(newMode == ServerProfile.VIEW_MODE_NO_INPUT)
+            client?.setInputDisabled(newMode == ServerProfile.VIEW_MODE_NO_INPUT)
             setFrameBufferUpdatesPaused(newMode == ServerProfile.VIEW_MODE_NO_VIDEO)
             resolveGestureStyle()
         }
     }
 
+    private fun refreshFrameView() {
+        frameViewRef.get()?.requestRender()
+    }
+
+    private fun rememberLoginInfo() {
+        if (loginInfoToBeRemembered.isNotEmpty()) {
+            debugCheck(profile.ID != 0L)
+            loginInfoToBeRemembered.forEach { it.applyTo(profile) }
+            loginInfoToBeRemembered.clear()
+            saveProfile()
+        }
+    }
+
+    private fun resolveScreenOrientation(): Int {
+        var choice = profileLive.value?.screenOrientation
+        if (choice == null || choice == "auto")
+            choice = pref.viewer.orientation
+
+
+        return when (choice) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    private fun resolveCapturePointer(): Boolean {
+        return connected && pref.input.capturePointer &&
+               hasWindowFocus.isTrue && !viewerHelpIsVisible.isTrue
+    }
+
+
     /**************************************************************************
-     * [VncClient.Observer] Implementation
+     * Session observer
      **************************************************************************/
+    private inner class RemoteSessionObserver : RemoteSession.Observer {
 
-    override fun getVncPassword(): String {
-        return getLoginInfo(LoginInfo.Type.VNC_PASSWORD).password
-    }
+        override fun onConnecting() {
+            state.postValue(State.Connecting)
+        }
 
-    override fun getVncCredentials(): UserCredential {
-        return getLoginInfo(LoginInfo.Type.VNC_CREDENTIAL).let { UserCredential(it.username, it.password) }
-    }
+        override fun onConnected(vncClient: VncClient, messenger: Messenger) {
+            launchMain {
+                this@VncViewModel.client = vncClient
+                this@VncViewModel.messenger = messenger
+                state.value = State.Connected
 
-    override fun verifyVncServerCertificate(certificate: X509Certificate): Boolean {
-        if (isCertificateTrusted(app, certificate))
-            return true
+                rememberLoginInfo()
 
-        val title = "Unknown server certificate"
-        val message = getUnknownCertificateMessage(certificate)
-        if (!confirmationRequest.requestResponse(Pair(title, message)))
+                // Initial clipboard sync, slightly delayed to allow extended clipboard negotiations
+                delay(1000L)
+                sendClipboardText()
+            }
+        }
+
+        override fun onDisconnected() {
+            // Block until main thread is synchronised with disconnected state
+            runBlocking(Dispatchers.Main) {
+                state.value = State.Disconnected
+                client = null
+                messenger = null
+            }
+        }
+
+        override fun onConnectionError(error: Throwable) {
+            when (error) {
+                is IOException -> disconnectReason.postValue(error.message)
+                is UnsatisfiedLinkError -> disconnectReason.postValue("Missing native library")
+            }
+        }
+
+        override fun onWakeOnLanBroadcastError(e: Throwable) {
+            launchMain { Toast.makeText(app, "Wake-on-LAN: ${e.message}", Toast.LENGTH_LONG).show() }
+        }
+
+
+        /**************************** [VncClient.Observer] *******************/
+
+        override fun getVncPassword(): String {
+            return getLoginInfo(LoginInfo.Type.VNC_PASSWORD).password
+        }
+
+        override fun getVncCredentials(): UserCredential {
+            return getLoginInfo(LoginInfo.Type.VNC_CREDENTIAL).let { UserCredential(it.username, it.password) }
+        }
+
+        override fun verifyVncServerCertificate(certificate: X509Certificate): Boolean {
+            if (isCertificateTrusted(app, certificate))
+                return true
+
+            val title = "Unknown server certificate"
+            val message = getUnknownCertificateMessage(certificate)
+            if (confirmationRequest.getResponseFor(Pair(title, message))) {
+                trustCertificate(app, certificate)
+                return true
+            }
+
             return false
-
-        trustCertificate(app, certificate)
-        return true
-    }
-
-    override fun onFramebufferUpdated() {
-        frameViewRef.get()?.requestRender()
-    }
-
-    override fun onCutTextReceived(text: String) {
-        receiveClipboardText(text)
-    }
-
-    override fun onFramebufferSizeChanged(width: Int, height: Int) {
-        launchMain {
-            frameState.setFramebufferSize(width.toFloat(), height.toFloat())
         }
-    }
 
-    override fun onPointerMoved(x: Int, y: Int) {
-        frameViewRef.get()?.requestRender()
-    }
-
-    override fun onBell() {
-        if (pref.ui.bell) {
-            Tones.notify(ToneGenerator.TONE_PROP_BEEP)
+        override fun onFramebufferUpdated() {
+            refreshFrameView()
         }
-    }
 
-    /**************************************************************************
-     * [SshTunnel.Observer] Implementation
-     **************************************************************************/
-    private inner class SshTunnelObserver : SshTunnel.Observer {
+        override fun onCutTextReceived(text: String) {
+            receiveClipboardText(text)
+        }
+
+        override fun onFramebufferSizeChanged(width: Int, height: Int) {
+            launchMain {
+                frameState.setFramebufferSize(width.toFloat(), height.toFloat())
+            }
+        }
+
+        override fun onPointerMoved(x: Int, y: Int) {
+            refreshFrameView()
+        }
+
+        override fun onBell() {
+            if (pref.ui.bell) {
+                Tones.notify(ToneGenerator.TONE_PROP_BEEP)
+            }
+        }
+
+
+        /**************************** [SshClient.Observer] *******************/
+
         override fun getKnownSshHostsFile() = getKnownHostsFile(app)
 
         override fun getSshPassword(): String {
@@ -542,7 +556,7 @@ class VncViewModel(app: Application) : BaseViewModel(app), VncClient.Observer {
         override fun confirmSshHostKeyWithUser(message: String, isNewHost: Boolean): Boolean {
             val titleRes = if (isNewHost) R.string.title_unknown_ssh_host else R.string.title_ssh_host_key_changed
             val title = app.getString(titleRes)
-            return confirmationRequest.requestResponse(Pair(title, message))
+            return confirmationRequest.getResponseFor(Pair(title, message))
         }
     }
 }

@@ -30,7 +30,6 @@ import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ToggleButton
-import androidx.annotation.DrawableRes
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -40,8 +39,10 @@ import androidx.viewpager.widget.PagerAdapter
 import androidx.viewpager.widget.ViewPager
 import com.gaurav.avnc.R
 import com.gaurav.avnc.databinding.VirtualKeysBinding
+import com.gaurav.avnc.ui.vnc.input.InputHandler
 import com.gaurav.avnc.util.AppPreferences
 import com.gaurav.avnc.util.addOnGlobalLayoutListener
+import com.gaurav.avnc.util.isTrue
 import kotlin.math.min
 import kotlin.math.sign
 
@@ -52,11 +53,10 @@ import kotlin.math.sign
  *
  * This class manages the inflation & visibility of virtual keys.
  */
-class VirtualKeys(private val activity: VncActivity) {
+class VirtualKeys(private val activity: VncActivity, private val inputHandler: InputHandler) {
 
     private val viewModel = activity.viewModel
     private val pref = activity.viewModel.pref
-    private val inputHandler = activity.inputHandler
     private val frameView = activity.binding.frameView
     private val stub = activity.binding.virtualKeysStub
     private val toggleKeys = mutableSetOf<ToggleButton>()
@@ -100,19 +100,9 @@ class VirtualKeys(private val activity: VncActivity) {
         (stub.binding as? VirtualKeysBinding)?.textBox?.let { if (it.isFocused) it.clearFocus() }
     }
 
-    fun onConnected(inPiP: Boolean) {
-        if (!inPiP && pref.runInfo.showVirtualKeys)
+    fun onConnected() {
+        if (pref.runInfo.showVirtualKeys && !viewModel.inPiPMode.isTrue)
             show()
-    }
-
-    fun onPiPModeChanged(inPiPMode: Boolean) {
-        if (inPiPMode && container?.isVisible == true) {
-            hide()
-            closedByPiPMode = true
-        } else if (!inPiPMode && closedByPiPMode) {
-            show()
-            closedByPiPMode = false
-        }
     }
 
     fun releaseMetaKeys() {
@@ -134,6 +124,16 @@ class VirtualKeys(private val activity: VncActivity) {
             releaseUnlockedMetaKeys()
     }
 
+    private fun onPiPModeChanged(inPiPMode: Boolean) {
+        if (inPiPMode && container?.isVisible == true) {
+            hide()
+            closedByPiPMode = true
+        } else if (!inPiPMode && closedByPiPMode) {
+            show()
+            closedByPiPMode = false
+        }
+    }
+
     private fun init() {
         if (stub.isInflated)
             return
@@ -144,6 +144,7 @@ class VirtualKeys(private val activity: VncActivity) {
         initKeys(binding)
         initPager(binding)
         inputHandler.onAfterKeyEventListeners += ::onAfterKeyEvent
+        viewModel.inPiPMode.observe(activity) { onPiPModeChanged(it) }
     }
 
     /**
@@ -359,7 +360,6 @@ enum class VirtualKey(
         /**
          * If icon is set, this key will be rendered as an ImageButton.
          */
-        @DrawableRes
         val icon: Int? = null,
 
         /**

@@ -35,13 +35,17 @@ import com.gaurav.avnc.EmptyDatabaseRule
 import com.gaurav.avnc.ProgressAssertion
 import com.gaurav.avnc.R
 import com.gaurav.avnc.SshTunnelScenario
+import com.gaurav.avnc.VncSessionScenario
 import com.gaurav.avnc.VncSessionTest
+import com.gaurav.avnc.checkDoesNotExist
 import com.gaurav.avnc.checkIsDisplayed
 import com.gaurav.avnc.checkIsNotDisplayed
 import com.gaurav.avnc.checkWillBeCompletelyDisplayed
 import com.gaurav.avnc.checkWillBeDisplayed
+import com.gaurav.avnc.checkWithTimeout
 import com.gaurav.avnc.doClick
 import com.gaurav.avnc.doTypeText
+import com.gaurav.avnc.instrumentation
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.onToast
 import com.gaurav.avnc.pollingAssert
@@ -235,6 +239,53 @@ class VncActivityTest : VncSessionTest() {
         onView(withSubstring("Could not unlock server")).checkWillBeDisplayed()
         onView(withId(R.id.frame_view)).checkIsNotDisplayed()
         vncSession.stop()
+    }
+
+    @Test
+    fun macOSAltCompatibility() {
+        vncSession.server.setProtocolString("RFB 003.889\n")
+        vncSession.run {
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_ALT_LEFT)
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_ALT_RIGHT)
+        }
+
+        // Alt key should be sent as Meta key
+        assertEquals(listOf(
+                XKeySym.XK_Meta_L to true,
+                XKeySym.XK_Meta_L to false,
+                XKeySym.XK_Meta_R to true,
+                XKeySym.XK_Meta_R to false,
+        ), vncSession.server.receivedKeySyms)
+    }
+
+
+    @Test
+    fun viewerHelp() {
+        VncSessionScenario().apply {
+            startServer()
+            startActivity(false)
+
+            onView(withText(R.string.msg_viewer_tips_label)).checkWillBeDisplayed()
+            onView(withText(R.string.tip_toolbar_usage)).checkIsDisplayed()
+            onView(withText(R.string.title_next)).checkIsDisplayed().doClick()
+
+            onView(withText(R.string.tip_session_end)).checkWillBeDisplayed()
+            onView(withText(R.string.title_got_it)).checkIsDisplayed().doClick()
+
+            onView(withText(R.string.msg_viewer_tips_label)).checkWithTimeout(doesNotExist())
+            assertConnected()
+            stop()
+        }
+
+        VncSessionScenario().apply {
+            startServer()
+            startActivity(false)
+            assertConnected()
+
+            // Help should not be visible now
+            onView(withText(R.string.msg_viewer_tips_label)).checkDoesNotExist()
+            stop()
+        }
     }
 
     /*************************** Toolbar *******************************************/

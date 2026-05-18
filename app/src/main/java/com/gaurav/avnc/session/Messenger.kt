@@ -1,15 +1,17 @@
 /*
- * Copyright (c) 2020  Gaurav Ujjwal.
+ * Copyright (c) 2026  Gaurav Ujjwal.
  *
  * SPDX-License-Identifier:  GPL-3.0-or-later
  *
  * See COPYING.txt for more details.
  */
 
-package com.gaurav.avnc.vnc
+package com.gaurav.avnc.session
 
 import android.graphics.PointF
 import android.util.Log
+import com.gaurav.avnc.vnc.PointerButton
+import com.gaurav.avnc.vnc.VncClient
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -21,21 +23,27 @@ class Messenger(private val client: VncClient) {
     /**************************************************************************
      * Sender thread
      **************************************************************************/
-
     private val sender = Executors.newSingleThreadExecutor()
-    private val senderLock = Any()
 
-    private fun execute(action: Runnable) {
-        synchronized(senderLock) {
-            if (!sender.isShutdown)
+    private fun execute(action: Runnable): Boolean {
+        try {
+            if (client.connected && !sender.isShutdown) {
                 sender.execute(action)
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w("Messenger", "Failed to enqueue action [isShutdown: ${sender.isShutdown}]: ${e.message}")
         }
+        return false
     }
 
-    fun cleanup() {
-        synchronized(senderLock) { sender.shutdown() }
-        runCatching { sender.awaitTermination(60, TimeUnit.SECONDS) }
-        if (!sender.isTerminated) Log.w(javaClass.simpleName, "Unable to fully stop Sender thread!")
+    fun shutdown() {
+        runCatching {
+            sender.shutdown()
+            sender.awaitTermination(60, TimeUnit.SECONDS)
+        }
+        if (!sender.isTerminated)
+            Log.w("Messenger", "Unable to shutdown messenger thread")
     }
 
 
@@ -73,11 +81,7 @@ class Messenger(private val client: VncClient) {
     }
 
     fun sendKey(keySym: Int, xtCode: Int, isDown: Boolean): Boolean {
-        if (!client.connected)
-            return false
-
-        execute { client.sendKeyEvent(keySym, xtCode, isDown) }
-        return true
+        return execute { client.sendKeyEvent(keySym, xtCode, isDown) }
     }
 
     fun insertButtonUpDelay() {

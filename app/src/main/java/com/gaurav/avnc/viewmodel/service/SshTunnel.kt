@@ -8,6 +8,7 @@
 
 package com.gaurav.avnc.viewmodel.service
 
+import android.os.Build
 import android.system.ErrnoException
 import android.system.OsConstants
 import android.util.Base64
@@ -23,6 +24,7 @@ import com.trilead.ssh2.ServerHostKeyVerifier
 import com.trilead.ssh2.crypto.OpenSSHKeyEncoder
 import com.trilead.ssh2.crypto.PEMDecoder
 import com.trilead.ssh2.crypto.PEMStructure
+import com.trilead.ssh2.crypto.cipher.BlockCipherFactory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -42,7 +44,7 @@ import java.security.MessageDigest
  * Known hosts & keys are stored in a file inside app's private storage.
  * For unknown host, user is prompted to confirm the key.
  */
-class HostKeyVerifier(private val observer: SshTunnel.Observer) : ServerHostKeyVerifier {
+class HostKeyVerifier(private val observer: SshClient.Observer) : ServerHostKeyVerifier {
 
     override fun verifyServerHostKey(hostname: String, port: Int, keyAlgorithm: String, key: ByteArray): Boolean {
         val knownHostsFile = observer.getKnownSshHostsFile()
@@ -136,7 +138,7 @@ class SshTunnelException(message: String = "", cause: Throwable? = null) : IOExc
 /**
  * Manager for SSH Tunnel
  */
-class SshTunnel(private val observer: Observer) {
+class SshClient(private val observer: Observer) {
 
     interface Observer {
         fun getKnownSshHostsFile(): File
@@ -151,7 +153,7 @@ class SshTunnel(private val observer: Observer) {
     /**
      * Opens the tunnel according to [profile]
      */
-    fun open(profile: ServerProfile): TunnelGate {
+    fun openTunnel(profile: ServerProfile): TunnelGate {
         check(connection == null) { "Connection already open" }
 
         connection = connect(profile)
@@ -172,7 +174,10 @@ class SshTunnel(private val observer: Observer) {
     private fun connect(profile: ServerProfile): Connection {
         for (address in InetAddress.getAllByName(profile.sshHost)) {
             try {
-                return Connection(address.hostAddress, profile.sshPort).apply { connect(HostKeyVerifier(observer)) }
+                return Connection(address.hostAddress, profile.sshPort).apply {
+                    removeUnsupportedCiphers(this)
+                    connect(HostKeyVerifier(observer))
+                }
             } catch (e: IOException) {
                 if (e.cause is NoRouteToHostException) continue
                 else throw unwrapLibraryException(e)
@@ -222,14 +227,13 @@ class SshTunnel(private val observer: Observer) {
         // to know the port system picked.
         // So we create a temporary ServerSocket, close it immediately and try to use its port.
         // But between the close-reuse, that port can be assigned to someone else, so we try again.
-        for (i in 1..50) {
-            val attemptedPort = ServerSocket(0).use { it.localPort }
-            val address = InetSocketAddress(localHost, attemptedPort)
-
+        repeat(50) {
             try {
-                val forwarder = connection.createLocalPortForwarder(address, profile.host, profile.port)
+                val attemptedPort = ServerSocket(0).use { it.localPort }
+                val attemptedAddress = InetSocketAddress(localHost, attemptedPort)
+                val forwarder = connection.createLocalPortForwarder(attemptedAddress, profile.host, profile.port)
                 return TunnelGate(localHost, attemptedPort, forwarder)
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 //Retry
             } catch (e: Throwable) {
                 throw unwrapLibraryException(e)
@@ -266,6 +270,17 @@ class SshTunnel(private val observer: Observer) {
         }
 
         return e
+    }
+
+    private fun removeUnsupportedCiphers(connection: Connection) {
+        if (Build.VERSION.SDK_INT < 28) {
+            // ChaCha20 is not supported
+            val ciphers = BlockCipherFactory.getDefaultCipherList()
+                    .filter { !it.contains("chacha20") }
+                    .toTypedArray()
+            connection.setClient2ServerCiphers(ciphers)
+            connection.setServer2ClientCiphers(ciphers)
+        }
     }
 
     /**

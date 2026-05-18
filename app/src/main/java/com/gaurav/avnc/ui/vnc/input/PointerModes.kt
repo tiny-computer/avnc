@@ -9,6 +9,7 @@
 package com.gaurav.avnc.ui.vnc.input
 
 import android.graphics.PointF
+import com.gaurav.avnc.util.debugCheckNotNull
 import com.gaurav.avnc.viewmodel.VncViewModel
 import com.gaurav.avnc.vnc.PointerButton
 import kotlin.math.abs
@@ -19,7 +20,6 @@ import kotlin.math.abs
  * point selection.
  */
 abstract class BasePointerMode(val viewModel: VncViewModel) {
-    private val messenger = viewModel.messenger
 
     //Used for remote scrolling
     private var accumulatedDx = 0F
@@ -35,15 +35,15 @@ abstract class BasePointerMode(val viewModel: VncViewModel) {
     open fun onGestureStop(p: PointF) = doButtonRelease(p)
 
     fun doButtonDown(button: PointerButton, p: PointF) {
-        transformPoint(p)?.let { messenger.sendPointerButtonDown(button, it) }
+        transformPoint(p)?.let { viewModel.messenger?.sendPointerButtonDown(button, it) }
     }
 
     fun doButtonUp(button: PointerButton, p: PointF) {
-        transformPoint(p)?.let { messenger.sendPointerButtonUp(button, it) }
+        transformPoint(p)?.let { viewModel.messenger?.sendPointerButtonUp(button, it) }
     }
 
     fun doButtonRelease(p: PointF) {
-        transformPoint(p)?.let { messenger.sendPointerButtonRelease(it) }
+        transformPoint(p)?.let { viewModel.messenger?.sendPointerButtonRelease(it) }
     }
 
     open fun doClick(button: PointerButton, p: PointF) {
@@ -51,7 +51,7 @@ abstract class BasePointerMode(val viewModel: VncViewModel) {
         // Some apps (mostly games) seems to ignore click event if button-up is received too early
         if ((button == PointerButton.Left || button == PointerButton.Middle || button == PointerButton.Right)
             && viewModel.profile.fButtonUpDelay)
-            messenger.insertButtonUpDelay()
+            viewModel.messenger?.insertButtonUpDelay()
         doButtonUp(button, p)
     }
 
@@ -139,17 +139,19 @@ class RelativePointerMode(viewModel: VncViewModel, private val accelerator: Poin
 
     override fun onGestureStart() {
         super.onGestureStart()
+        debugCheckNotNull(viewModel.client)
+
         //Initialize with the latest pointer position
-        pointerPosition.apply {
-            x = viewModel.client.pointerX.toFloat()
-            y = viewModel.client.pointerY.toFloat()
+        viewModel.client?.let {
+            pointerPosition.x = it.pointerX.toFloat()
+            pointerPosition.y = it.pointerY.toFloat()
+            it.ignorePointerMovesByServer = true
         }
-        viewModel.client.ignorePointerMovesByServer = true
     }
 
     override fun onGestureStop(p: PointF) {
         super.onGestureStop(p)
-        viewModel.client.ignorePointerMovesByServer = false
+        viewModel.client?.ignorePointerMovesByServer = false
     }
 
     override fun transformPoint(p: PointF) = pointerPosition

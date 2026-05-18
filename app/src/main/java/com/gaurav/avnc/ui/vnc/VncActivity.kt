@@ -14,7 +14,6 @@ import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -39,14 +38,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.gaurav.avnc.R
 import com.gaurav.avnc.databinding.ActivityVncBinding
 import com.gaurav.avnc.databinding.NoVideoOverlayBinding
+import com.gaurav.avnc.databinding.ViewerHelpBinding
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.ui.vnc.input.InputHandler
 import com.gaurav.avnc.util.DeviceAuthPrompt
 import com.gaurav.avnc.util.SamsungDex
+import com.gaurav.avnc.util.debugCheck
 import com.gaurav.avnc.util.enableChildLayoutTransitions
+import com.gaurav.avnc.util.loopAnimatedDrawable
 import com.gaurav.avnc.viewmodel.VncViewModel
-import com.gaurav.avnc.viewmodel.VncViewModel.State.Companion.isConnected
-import com.gaurav.avnc.viewmodel.VncViewModel.State.Companion.isDisconnected
 import com.gaurav.avnc.vnc.VncUri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -97,12 +97,11 @@ class VncActivity : AppCompatActivity() {
 
     val viewModel by viewModels<VncViewModel>()
     lateinit var binding: ActivityVncBinding
-    val inputHandler = InputHandler(this)
-    val virtualKeys by lazy { VirtualKeys(this) }
+    private val inputHandler = InputHandler(this)
+    val virtualKeys by lazy { VirtualKeys(this, inputHandler) }
     val toolbar by lazy { Toolbar(this) }
     private val serverUnlockPrompt = DeviceAuthPrompt(this)
     private val layoutManager by lazy { LayoutManager(this) }
-    private var forceDisabledPointerCapture = false
     private var restoredFromBundle = false
     private var wasConnectedWhenStopped = false
     private var onStartTime = 0L
@@ -112,21 +111,18 @@ class VncActivity : AppCompatActivity() {
         DeviceAuthPrompt.applyFingerprintDialogFix(supportFragmentManager)
 
         super.onCreate(savedInstanceState)
-        if (!initConnection(savedInstanceState)) {
-            finish()
+        if (!startup(savedInstanceState))
             return
-        }
 
         //Main UI
         binding = DataBindingUtil.setContentView(this, R.layout.activity_vnc)
         binding.viewModel = viewModel
         binding.lifecycleOwner = this
-        binding.frameView.initialize(this)
+        binding.frameView.initialize(viewModel, inputHandler)
         viewModel.frameViewRef = WeakReference(binding.frameView)
         toolbar.initialize()
 
         setupLayout()
-        setupServerUnlock()
         setupNoVideoOverlay()
 
         //Observers
@@ -135,6 +131,7 @@ class VncActivity : AppCompatActivity() {
         viewModel.confirmationRequest.observe(this) { showConfirmationDialog() }
         viewModel.state.observe(this) { onClientStateChanged(it) }
         viewModel.profileLive.observe(this) { onProfileUpdated() }
+        viewModel.capturePointer.observe(this) { updatePointerCapture(it) }
 
         autoReconnectDelay = intent.getIntExtra(AUTO_RECONNECT_DELAY_KEY, 5)
         savedInstanceState?.let {
@@ -165,51 +162,111 @@ class VncActivity : AppCompatActivity() {
         binding.frameView.onPause()
         if (viewModel.pref.viewer.pauseUpdatesInBackground)
             viewModel.setFrameBufferUpdatesPaused(true)
-        wasConnectedWhenStopped = viewModel.state.value.isConnected
+        wasConnectedWhenStopped = viewModel.connected
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putParcelable(PROFILE_KEY, viewModel.profileLive.value)
-        outState.putBoolean("wasConnectedWhenStopped", wasConnectedWhenStopped || viewModel.state.value.isConnected)
+        outState.putBoolean("wasConnectedWhenStopped", wasConnectedWhenStopped || viewModel.connected)
     }
 
-    private fun initConnection(savedState: Bundle?): Boolean {
-        @Suppress("DEPRECATION")
+
+    /**********************************************************************************************
+     * Session startup
+     *********************************************************************************************/
+    private sealed class StartupArg {
+        data class Profile(val profile: ServerProfile) : StartupArg()
+        data class ProfileId(val profileId: Long) : StartupArg()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun prepareStartupArg(savedState: Bundle?): StartupArg? {
+        val id = intent.getLongExtra(PROFILE_ID_KEY, 0)
         val profile = savedState?.getParcelable(PROFILE_KEY)
                       ?: intent.getParcelableExtra<ServerProfile?>(PROFILE_KEY)
 
-        if (profile != null) {
-            viewModel.initConnection(profile.copy()) // Use a copy to avoid modification to intent
-            return true
-        }
-
-        val profileId = intent.getLongExtra(PROFILE_ID_KEY, 0)
-        if (profileId == 0L) {
-            Toast.makeText(this, "Error: Missing Server Info", Toast.LENGTH_LONG).show()
-            return false
-        }
-
-        initConnectionFromId(profileId)
-        return true
-    }
-
-    private fun initConnectionFromId(profileId: Long) {
-        lifecycleScope.launch {
-            val profile = viewModel.getProfileById(profileId)
-            if (profile != null) {
-                viewModel.initConnection(profile)
-            } else {
-                Toast.makeText(this@VncActivity, "Error: Invalid Server ID", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Invalid profile ID passed via Intent: $profileId")
-                finish()
+        return when {
+            // Prefer to use profile if available to keep changes across activity restarts.
+            // And create a copy to avoid modification to source profile.
+            profile != null -> StartupArg.Profile(profile.copy())
+            id != 0L -> StartupArg.ProfileId(id)
+            else -> {
+                handleMissingStartupArgs()
+                null
             }
         }
     }
 
-    private fun onProfileUpdated() {
-        setupOrientation()
+    private fun startup(savedState: Bundle?): Boolean {
+        if (viewModel.profileLive.value != null) // todo refactor
+            return true
+
+        val startupArg = prepareStartupArg(savedState) ?: return false
+        val isSavedServer = startupArg is StartupArg.ProfileId ||
+                            (startupArg is StartupArg.Profile && startupArg.profile.ID == 0L)
+
+        if (isSavedServer && viewModel.pref.server.lockSavedServer)
+            startAfterUnlockingServer(startupArg)
+        else
+            startSession(startupArg)
+
+        return true
     }
+
+
+    private fun startAfterUnlockingServer(startupArg: StartupArg) {
+        serverUnlockPrompt.init(
+                onSuccess = { startSession(startupArg) },
+                onFail = { handleServerUnlockFailure(it) }
+        )
+
+        if (serverUnlockPrompt.canLaunch()) {
+            if (!serverUnlockPrompt.hasLaunched())
+                serverUnlockPrompt.launch(getString(R.string.title_unlock_dialog))
+        } else
+            startSession(startupArg)
+    }
+
+
+    private fun startSession(startupArg: StartupArg) {
+        when (startupArg) {
+            is StartupArg.Profile -> startSession(startupArg.profile)
+            is StartupArg.ProfileId -> {
+                lifecycleScope.launch {
+                    val profile = viewModel.getProfileById(startupArg.profileId)
+                    if (profile == null)
+                        handleInvalidProfileId(startupArg.profileId)
+                    else
+                        startSession(profile)
+                }
+            }
+        }
+    }
+
+    private fun startSession(profile: ServerProfile) {
+        viewModel.initConnection(profile)
+    }
+
+    private fun handleMissingStartupArgs() {
+        debugCheck(false) // Crash debug builds
+        Toast.makeText(this, "Error: Missing Server Info", Toast.LENGTH_LONG).show()
+        finish()
+    }
+
+    private fun handleServerUnlockFailure(msg: String) {
+        Toast.makeText(this, "Could not unlock server", Toast.LENGTH_LONG).show()
+        Log.e(TAG, "Server unlock failed: $msg")
+        finish()
+    }
+
+    private fun handleInvalidProfileId(id: Long) {
+        Toast.makeText(this, "Error: Invalid Server ID", Toast.LENGTH_LONG).show()
+        Log.e(TAG, "Invalid profile ID passed via Intent: $id")
+        finish()
+    }
+
+    private fun onProfileUpdated() {}
 
     private fun retryConnection(seamless: Boolean = false, nextAutoReconnectDelay: Int = 0) {
         //We simply create a new activity to force creation of new ViewModel
@@ -226,20 +283,6 @@ class VncActivity : AppCompatActivity() {
                 overridePendingTransition(0, 0)
             }
             finish()
-        }
-    }
-
-    private fun setupServerUnlock() {
-        serverUnlockPrompt.init(
-                onSuccess = { viewModel.serverUnlockRequest.offerResponse(true) },
-                onFail = { viewModel.serverUnlockRequest.offerResponse(false) }
-        )
-
-        viewModel.serverUnlockRequest.observe(this) {
-            if (serverUnlockPrompt.canLaunch())
-                serverUnlockPrompt.launch(getString(R.string.title_unlock_dialog))
-            else
-                viewModel.serverUnlockRequest.offerResponse(true)
         }
     }
 
@@ -304,20 +347,20 @@ class VncActivity : AppCompatActivity() {
     }
 
     private fun onClientStateChanged(newState: VncViewModel.State) {
-        val isConnected = newState.isConnected
+        val isConnected = newState == VncViewModel.State.Connected
 
         binding.frameView.isVisible = isConnected
         binding.frameView.keepScreenOn = isConnected && viewModel.pref.viewer.keepScreenOn
         SamsungDex.setMetaKeyCapture(this, isConnected)
         layoutManager.onConnectionStateChanged()
-        inputHandler.onStateChanged(newState)
+        inputHandler.onStateChanged(isConnected)
+        toolbar.onStateChange(isConnected)
         updateStatusContainerVisibility(isConnected)
-        updatePointerCapture()
         autoReconnect(newState)
 
         if (isConnected) {
-            ViewerHelp().onConnected(this)
-            virtualKeys.onConnected(isInPiPMode())
+            showViewerHelp()
+            virtualKeys.onConnected()
             autoReconnectDelay = 1
         }
 
@@ -332,20 +375,15 @@ class VncActivity : AppCompatActivity() {
         viewModel.saveProfile()
     }
 
-    private fun updatePointerCapture() {
-        if (Build.VERSION.SDK_INT < 26 || !viewModel.pref.input.capturePointer)
+    private fun updatePointerCapture(capturePointer: Boolean) {
+        if (Build.VERSION.SDK_INT < 26)
             return
 
-        if (viewModel.state.value.isConnected && !forceDisabledPointerCapture) {
+        if (capturePointer) {
             binding.frameView.requestFocus()
             binding.frameView.requestPointerCapture()
         } else
             binding.frameView.releasePointerCapture()
-    }
-
-    fun forceDisablePointerCapture(forceDisable: Boolean) {
-        forceDisabledPointerCapture = forceDisable
-        updatePointerCapture()
     }
 
     private fun updateStatusContainerVisibility(isConnected: Boolean) {
@@ -367,7 +405,7 @@ class VncActivity : AppCompatActivity() {
 
     private var autoReconnecting = false
     private fun autoReconnect(state: VncViewModel.State) {
-        if (!state.isDisconnected)
+        if (state != VncViewModel.State.Disconnected)
             return
 
         // If disconnected when coming back from background, try to reconnect immediately
@@ -408,31 +446,24 @@ class VncActivity : AppCompatActivity() {
     private fun setupLayout() {
         layoutManager.initialize()
 
+        viewModel.preferredScreenOrientation.observe(this) { requestedOrientation = it }
+
         if (Build.VERSION.SDK_INT >= 28 && viewModel.pref.viewer.drawBehindCutout) {
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
-    }
 
-    private fun setupOrientation() {
-        val choice = viewModel.profile.screenOrientation.let {
-            if (it != "auto") it else viewModel.pref.viewer.orientation
-        }
-
-        requestedOrientation = when (choice) {
-            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        if (Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode) {
+            viewModel.inPiPMode.value = true
         }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        layoutManager.onWindowFocusChanged(hasFocus)
+        viewModel.hasWindowFocus.value = hasFocus
         if (hasFocus) {
             viewModel.sendClipboardText()
-            updatePointerCapture()
         }
     }
 
@@ -440,10 +471,6 @@ class VncActivity : AppCompatActivity() {
     /************************************************************************************
      * Picture-in-Picture support
      ************************************************************************************/
-
-    private fun isInPiPMode(): Boolean {
-        return Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode
-    }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
@@ -453,11 +480,9 @@ class VncActivity : AppCompatActivity() {
     @RequiresApi(26)
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        virtualKeys.onPiPModeChanged(isInPictureInPictureMode)
-        if (isInPictureInPictureMode) {
-            toolbar.close()
-            viewModel.resetZoom()
-        } else {
+        viewModel.inPiPMode.value = isInPictureInPictureMode
+
+        if (!isInPictureInPictureMode) {
             // If user taps the Close button on PiP window, Android will stop the Activity
             // but won't destroy it. This is not a problem for singleTask activities since those
             // are still shown in Recents screen. But AVNC doesn't use singleTask. So VncActivity
@@ -471,7 +496,7 @@ class VncActivity : AppCompatActivity() {
     }
 
     private fun enterPiPMode() {
-        val canEnter = viewModel.pref.viewer.pipEnabled && viewModel.client.connected
+        val canEnter = viewModel.pref.viewer.pipEnabled && viewModel.connected && !viewModel.videoDisabled
 
         if (canEnter && Build.VERSION.SDK_INT >= 26) {
 
@@ -509,5 +534,51 @@ class VncActivity : AppCompatActivity() {
 
     override fun onKeyMultiple(keyCode: Int, repeatCount: Int, event: KeyEvent): Boolean {
         return inputHandler.onKeyEvent(event) || super.onKeyMultiple(keyCode, repeatCount, event)
+    }
+
+
+    /************************************************************************************
+     * Help for new users.
+     * Two of the most common question asked by new users are:
+     * - Where is the toolbar, or how to open it
+     * - How to cleanly exit a session
+     *
+     * When user starts a session for the first time, this help is shown.
+     * It consists of two pages: one shows how to open the toolbar drawer,
+     * other tells about the Back navigation button.
+     ***********************************************************************************/
+    fun showViewerHelp() {
+        if (viewModel.pref.runInfo.hasShownViewerHelp)
+            return
+
+        initHelpView()
+    }
+
+    private fun initHelpView() {
+        val helpBinding = ViewerHelpBinding.inflate(layoutInflater, binding.drawerLayout, false)
+        binding.drawerLayout.addView(helpBinding.root, 1)
+        viewModel.viewerHelpIsVisible.value = true
+
+        helpBinding.root.setOnClickListener { /* Consume clicks to stop them from passing through to FrameView */ }
+        enableChildLayoutTransitions(helpBinding.pageHost)
+
+        // Open help view with animation
+        helpBinding.root.alpha = 0f
+        helpBinding.root.animate().alpha(1f).setStartDelay(500).withEndAction {
+            loopAnimatedDrawable(helpBinding.toolbarAnimation)
+        }
+
+        helpBinding.nextBtn.setOnClickListener {
+            helpBinding.page1.isVisible = false
+            helpBinding.page2.isVisible = true
+            loopAnimatedDrawable(helpBinding.navbarAnimation)
+        }
+        helpBinding.endBtn.setOnClickListener {
+            viewModel.pref.runInfo.hasShownViewerHelp = true
+            viewModel.viewerHelpIsVisible.value = false
+            helpBinding.root.animate().alpha(0f).withEndAction {
+                binding.drawerLayout.removeView(helpBinding.root)
+            }
+        }
     }
 }

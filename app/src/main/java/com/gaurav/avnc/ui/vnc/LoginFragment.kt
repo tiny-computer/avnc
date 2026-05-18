@@ -17,13 +17,11 @@ import android.widget.ArrayAdapter
 import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Observer
 import com.gaurav.avnc.R
 import com.gaurav.avnc.databinding.FragmentCredentialBinding
 import com.gaurav.avnc.model.LoginInfo
 import com.gaurav.avnc.model.ServerProfile
 import com.gaurav.avnc.viewmodel.VncViewModel
-import com.gaurav.avnc.viewmodel.VncViewModel.State.Companion.isConnected
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 
@@ -95,71 +93,35 @@ class LoginFragment : DialogFragment() {
     }
 
     private fun getLoginInfoFromProfile(p: ServerProfile): LoginInfo {
-        return when (loginType) {
-            LoginInfo.Type.VNC_PASSWORD -> LoginInfo(p.name, p.host, "", p.password)
-            LoginInfo.Type.VNC_CREDENTIAL -> LoginInfo(p.name, p.host, p.username, p.password)
-            LoginInfo.Type.SSH_PASSWORD -> LoginInfo(p.name, p.sshHost, "", p.sshPassword)
-            LoginInfo.Type.SSH_KEY_PASSWORD -> LoginInfo(p.name, p.sshHost, "", "" /*p.sshPrivateKeyPassword*/)
-        }
-    }
-
-    private fun setLoginInfoInProfile(p: ServerProfile, l: LoginInfo) {
-        when (loginType) {
-            LoginInfo.Type.VNC_PASSWORD -> p.password = l.password
-            LoginInfo.Type.VNC_CREDENTIAL -> {
-                p.username = l.username
-                p.password = l.password
-            }
-            LoginInfo.Type.SSH_PASSWORD -> p.sshPassword = l.password
-            LoginInfo.Type.SSH_KEY_PASSWORD -> Unit /* Key password is not saved in profile */
-        }
+        return LoginInfo.fromProfile(p, loginType)
     }
 
     private fun onOk() {
         loginInfo.password = getRealPassword(loginInfo.password)
         viewModel.loginInfoRequest.offerResponse(loginInfo)
         if (binding.remember.isChecked)
-            saveLoginInfo(loginInfo)
+            viewModel.loginInfoToBeRemembered += loginInfo
     }
 
     private fun onCancel() {
         requireActivity().finish()
     }
 
-    /**
-     * If user has asked to remember credentials, we need to save them
-     * to database. But we don't want to save them immediately because
-     * user might have mistyped them. So, we wait until successful
-     * connection before saving them.
-     */
-    private fun saveLoginInfo(loginInfo: LoginInfo) {
-        // Use activity as owner because this fragment will likely be destroyed before connecting
-        viewModel.state.observe(requireActivity(), object : Observer<VncViewModel.State> {
-            override fun onChanged(value: VncViewModel.State) {
-                if (value.isConnected) {
-                    setLoginInfoInProfile(viewModel.profile, loginInfo)
-                    viewModel.saveProfile()
-                    viewModel.state.removeObserver(this)
-                }
-            }
-        })
-    }
 
-    /**
-     * Hooks completion adapters
+    /**********************************************************************************************
+     * Autocompletion
      *
      * This feature might not be that useful to end-users, but it saves a lot of time
      * during development because I have to frequently install/uninstall app, test
      * different servers running on different addresses/ports.
-     */
+     *********************************************************************************************/
     private fun setupAutoComplete() {
-        if (viewModel.pref.server.lockSavedServer)
+        if (viewModel.pref.server.lockSavedServer || loginType == LoginInfo.Type.SSH_KEY_PASSWORD)
             return
 
         viewModel.savedProfiles.observe(this) { profiles ->
-            val logins = profiles.map { getLoginInfoFromProfile(it) }
-            val usernames = logins.map { it.username }.filter { it.isNotEmpty() }.distinct()
-            val passwords = preparePasswordSuggestions(logins)
+            val usernames = prepareUsernameSuggestions(profiles)
+            val passwords = preparePasswordSuggestions(profiles)
 
             if (usernames.isNotEmpty()) {
                 val usernameAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, usernames)
@@ -175,20 +137,33 @@ class LoginFragment : DialogFragment() {
         }
     }
 
+    private fun prepareUsernameSuggestions(profiles: List<ServerProfile>): List<String> {
+        if (loginType != LoginInfo.Type.VNC_CREDENTIAL)
+            return listOf()
+
+        return profiles.map { it.username }.filter { it.isNotEmpty() }.distinct()
+    }
+
     /**
      * Instead of showing plaintext passwords, we show server name & host in suggestion
      * list. When user taps OK, we convert the suggestion back to real password.
      */
     private val passwordMap = ArrayMap<String, String>()
 
-    private fun preparePasswordSuggestions(list: List<LoginInfo>): List<String> {
-        list.filter { it.password.isNotEmpty() }
-                .map { Pair("from: ${it.name} [${it.host}]", it.password) }
+    private fun preparePasswordSuggestions(profiles: List<ServerProfile>): List<String> {
+        profiles.map { Pair(getPasswordLabel(it), getLoginInfoFromProfile(it).password) }
                 .distinct()
+                .filter { it.second.isNotEmpty() }
                 .toMap(passwordMap)
-                .removeAll(passwordMap.values) //Guard against (very unlikely) clash with real password
+                .removeAll(passwordMap.values) //Guard against unlikely clash with real password
 
         return passwordMap.keys.toList()
+    }
+
+    private fun getPasswordLabel(profile: ServerProfile): String {
+        val host = if (loginType == LoginInfo.Type.SSH_PASSWORD) profile.sshHost else profile.host
+        return "from: ${profile.name} [${host}]"
+
     }
 
     private fun getRealPassword(typedPassword: String) = passwordMap[typedPassword] ?: typedPassword
