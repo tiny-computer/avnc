@@ -190,13 +190,21 @@ data class ServerProfile(
         var sshUsername: String = "",
         var sshAuthType: Int = SSH_AUTH_KEY,
         var sshPassword: String = "",
-        var sshPrivateKey: String = ""
+        var sshPrivateKey: String = "",
+
+        /**
+         * Path to Unix socket for local VNC connections.
+         * Only used when [channelType] is [CHANNEL_UNIX_SOCKET].
+         */
+        @ColumnInfo(defaultValue = "")
+        var unixSocketPath: String = ""
 
 ) : Parcelable {
 
     companion object {
         // Channel types (from RFC 7869)
         const val CHANNEL_TCP = 1
+        const val CHANNEL_UNIX_SOCKET = 2
         const val CHANNEL_SSH_TUNNEL = 24
 
         // SSH auth types

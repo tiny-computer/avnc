@@ -363,6 +363,21 @@ Java_com_gaurav_avnc_vnc_VncClient_nativeSetDest(JNIEnv *env, jobject /*thiz*/, 
 
 extern "C"
 JNIEXPORT jboolean JNICALL
+Java_com_gaurav_avnc_vnc_VncClient_nativeInitUnixSocket(JNIEnv *env, jobject /*thiz*/, jlong client_ptr,
+                                                        jstring path) {
+    auto client = (rfbClient *) client_ptr;
+
+    client->serverHost = getNativeStrCopy(env, path);
+    client->serverPort = 0;  // Port is unused for Unix sockets
+
+    if (rfbInitClient(client, nullptr, nullptr))
+        return JNI_TRUE;
+
+    return JNI_FALSE;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
 Java_com_gaurav_avnc_vnc_VncClient_nativeInit(JNIEnv *env, jobject /*thiz*/, jlong client_ptr,
                                               jstring host, jint port) {
     auto client = (rfbClient *) client_ptr;

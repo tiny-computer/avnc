@@ -108,6 +108,9 @@ class RemoteSession(private val observer: Observer) {
             ServerProfile.CHANNEL_TCP ->
                 vncClient.connect(profile.host, profile.port)
 
+            ServerProfile.CHANNEL_UNIX_SOCKET ->
+                vncClient.connectUnixSocket(profile.unixSocketPath)
+
             ServerProfile.CHANNEL_SSH_TUNNEL ->
                 sshClient.openTunnel(profile).use {
                     vncClient.connect(it.host, it.port)

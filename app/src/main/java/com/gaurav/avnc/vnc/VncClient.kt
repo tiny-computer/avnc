@@ -147,7 +147,7 @@ class VncClient(private val observer: Observer) {
     }
 
     /**
-     * Initializes VNC connection.
+     * Initializes VNC connection via TCP.
      */
     fun connect(host: String, port: Int) {
         stateLock.read {
@@ -155,6 +155,23 @@ class VncClient(private val observer: Observer) {
             check(!destroyed) { "Client has been destroyed" }
 
             if (!nativeInit(nativePtr, host, port))
+                throw IOException(nativeGetLastErrorStr())
+        }
+        stateLock.write {
+            if (!destroyed)
+                connected = true
+        }
+    }
+
+    /**
+     * Initializes VNC connection via Unix socket.
+     */
+    fun connectUnixSocket(path: String) {
+        stateLock.read {
+            check(!connected) { "Already connected" }
+            check(!destroyed) { "Client has been destroyed" }
+
+            if (!nativeInitUnixSocket(nativePtr, path))
                 throw IOException(nativeGetLastErrorStr())
         }
         stateLock.write {
@@ -394,6 +411,7 @@ class VncClient(private val observer: Observer) {
     private external fun nativeClientCreate(): Long
     private external fun nativeConfigure(clientPtr: Long, securityType: Int, useLocalCursor: Boolean, imageQuality: Int, useRawEncoding: Boolean)
     private external fun nativeInit(clientPtr: Long, host: String, port: Int): Boolean
+    private external fun nativeInitUnixSocket(clientPtr: Long, path: String): Boolean
     private external fun nativeSetDest(clientPtr: Long, host: String, port: Int)
     private external fun nativeProcessServerMessage(clientPtr: Long): Boolean
     private external fun nativeSendKeyEvent(clientPtr: Long, keySym: Int, xtCode: Int, isDown: Boolean): Boolean

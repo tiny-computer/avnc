@@ -57,6 +57,7 @@ class VncUri(str: String) {
     val sshPort = uri.getQueryParameter("SshPort")?.toIntOrNull()
     val sshUsername = uri.getQueryParameter("SshUsername")
     val sshPassword = uri.getQueryParameter("SshPassword")
+    val unixSocket = uri.getQueryParameter("UnixSocket")
 
     /**
      *  Applies this URI to given profile. Any parameter present in this URI will
@@ -84,7 +85,15 @@ class VncUri(str: String) {
     /**
      * Generates a [ServerProfile] using this instance.
      */
-    fun toServerProfile() = applyToProfile(ServerProfile())
+    fun toServerProfile(): ServerProfile {
+        val profile = ServerProfile()
+        if (unixSocket != null) {
+            profile.channelType = ServerProfile.CHANNEL_UNIX_SOCKET
+            profile.unixSocketPath = unixSocket
+            profile.name = connectionName ?: "vnc+unix://$unixSocket"
+        }
+        return applyToProfile(profile)
+    }
 
     override fun toString() = uriString
 }
