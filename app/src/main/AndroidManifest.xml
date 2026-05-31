@@ -25,6 +25,7 @@
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
+            android:windowSoftInputMode="stateHidden"
             tools:ignore="UnusedAttribute"
             android:theme="@style/App.Theme" />
 

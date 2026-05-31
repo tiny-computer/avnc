@@ -10,6 +10,7 @@ package com.gaurav.avnc.ui.about
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 import com.gaurav.avnc.R
 
 /**
@@ -28,6 +29,9 @@ class AboutActivity : AppCompatActivity() {
         setContentView(R.layout.activity_about)
         setSupportActionBar(findViewById(R.id.toolbar))
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        // Handle edge-to-edge on Android 15+ (see PrefsActivity for details)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()

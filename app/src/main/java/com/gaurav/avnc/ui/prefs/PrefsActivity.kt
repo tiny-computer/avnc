@@ -15,6 +15,7 @@ import android.os.Bundle
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.WindowCompat
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
@@ -36,6 +37,13 @@ class PrefsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreference
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        // Handle edge-to-edge on Android 15+ (targetSdk >= 35):
+        // When the consuming app does not opt out, content draws behind the
+        // status bar. We enable decor-fits-system-windows = false so that
+        // the root layout's fitsSystemWindows="true" receives insets and
+        // automatically adds proper padding for status bar + nav bar.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (savedInstanceState == null) {
             supportFragmentManager

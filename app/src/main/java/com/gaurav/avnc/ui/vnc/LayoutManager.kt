@@ -144,8 +144,12 @@ class LayoutManager(private val activity: VncActivity) {
 
     private fun enterFullscreen() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        insetController.hide(Type.systemBars())
+
+        // Set behavior BEFORE hiding so it takes effect properly on all devices.
+        // BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE hides bars and shows them
+        // transiently when user swipes from the edge.
         insetController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetController.hide(Type.systemBars())
 
         if (SDK_INT < 30) {
             // This flag is required to keep the status bar hidden when IME is visible
@@ -238,8 +242,15 @@ class LayoutManager(private val activity: VncActivity) {
 
     private fun applyOpaqueInsets(opaqueInsets: Insets) {
         // Guess if IME is closing
-        if (!windowInsets.isVisible(Type.ime()) && rootView.paddingBottom != 0)
+        val imeWasVisible = rootView.paddingBottom != 0
+        if (!windowInsets.isVisible(Type.ime()) && imeWasVisible) {
             activity.virtualKeys.onKeyboardClose()
+
+            // Re-hide navigation bar after keyboard is dismissed.
+            // On some devices, the nav bar may remain visible after IME closes.
+            if (SDK_INT >= 30 && fullscreenEnabled && viewModel.connected)
+                insetController.hide(Type.navigationBars())
+        }
 
         val insets = windowInsetsToViewInsets(opaqueInsets, rootView)
         if (rootView.paddingRight != insets.right || rootView.paddingBottom != insets.bottom)
