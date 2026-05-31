@@ -50,13 +50,13 @@ class AppPreferences(context: Context) {
         val tap1 = "left-click" //Preference UI was removed
         val tap2; get() = prefs.getString("gesture_tap2", "open-keyboard")!!
         val tap3; get() = prefs.getString("gesture_tap3", "none")!!
-        val doubleTap; get() = prefs.getString("gesture_double_tap", "double-click")!!
+        val doubleTap; get() = prefs.getString("gesture_double_tap", "none")!!
         val longPress; get() = prefs.getString("gesture_long_press", "right-click")!!
         val swipe1; get() = prefs.getString("gesture_swipe1", "pan")!!
         val swipe2; get() = prefs.getString("gesture_swipe2", "remote-scroll")!!
         val swipe3; get() = prefs.getString("gesture_swipe3", "pan")!!
-        val doubleTapSwipe; get() = prefs.getString("gesture_double_tap_swipe", "remote-drag")!!
-        val longPressSwipe; get() = prefs.getString("gesture_long_press_swipe", "none")!!
+        val doubleTapSwipe; get() = prefs.getString("gesture_double_tap_swipe", "none")!!
+        val longPressSwipe; get() = prefs.getString("gesture_long_press_swipe", "remote-drag")!!
         val longPressSwipeEnabled; get() = (longPressSwipe != "none" && longPress != "left-press")
         val longPressDetectionEnabled; get() = (longPress != "none" || longPressSwipeEnabled)
         val swipeSensitivity; get() = prefs.getInt("gesture_swipe_sensitivity", 10) / 10f

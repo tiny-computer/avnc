@@ -25,7 +25,7 @@
             app:widgetLayout="@layout/help_btn" />
 
         <ListPreference
-            app:defaultValue="double-click"
+            app:defaultValue="none"
             app:entries="@array/double_tap_action_entries"
             app:entryValues="@array/double_tap_action_values"
             app:key="gesture_double_tap"
@@ -81,7 +81,7 @@
             app:useSimpleSummaryProvider="true" />
 
         <com.gaurav.avnc.ui.prefs.ListPreferenceEx
-            app:defaultValue="remote-drag"
+            app:defaultValue="none"
             app:entries="@array/double_tap_swipe_action_entries"
             app:entryValues="@array/double_tap_swipe_action_values"
             app:key="gesture_double_tap_swipe"
@@ -89,7 +89,7 @@
             app:useSimpleSummaryProvider="true" />
 
         <com.gaurav.avnc.ui.prefs.ListPreferenceEx
-            app:defaultValue="none"
+            app:defaultValue="remote-drag"
             app:entries="@array/long_press_swipe_action_entries"
             app:entryValues="@array/long_press_swipe_action_values"
             app:helpMessage="@string/msg_drag_gesture_help"
